@@ -35,7 +35,7 @@ license: MIT
 ## 通用规则
 
 ### 禁止直接 fetch（需求#12）
-所有鸿蒙文档访问 MUST 经 `python3 scripts/search/search.py` 或 `python3 scripts/search/detail.py` 脚本，禁止 agent 直接 WebFetch。此规则在 search 子命令脚本就绪后强制执行。
+所有鸿蒙文档访问 MUST 经 `python3 scripts/search/search.py` 或 `python3 scripts/search/detail.py` 脚本执行(详见"禁止事项"第 1 条)。
 
 ### 平台检测（需求#3）
 test 子命令经 `python3 -m scripts.test.cli check` 检测平台。Linux 仅静态检查；Windows/macOS 启用模拟器全功能。模拟器工具在 Linux 显式禁用并提示用户。
