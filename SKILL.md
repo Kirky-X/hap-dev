@@ -46,8 +46,12 @@ test 子命令经 `python3 -m scripts.test.cli check` 检测平台。Linux 仅�
 - embed_model 为默认值且 data/harmonyos.qdrant 存在 → 直接用预构建库，不重算向量。
 - embed_model 非默认 → 下载模型 + 全量重索引。
 
+> 🔴 **CHECKPOINT**：修改 `embed_model` / `embed_dim` 后 MUST 运行 `python3 scripts/kb/build_db.py` 全量重建向量库。未重建直接 query 会因维度不匹配报错。此规则同样适用于 `rerank_model` 切换后未 reindex 的情况。
+
 ### description 懒填充（需求#6）
 kb query 命中文档但 description=="无描述"时，agent 调 `search detail <url>` 取正文 → 生成 ≤200 字 description → 调 `kb update-description <id> "<desc>"` 回填 + 重算向量。
+
+> 🔴 **CHECKPOINT**：`kb merge` 完成后,新库需 `reindex --force` 刷新 description 变化文档的向量。**禁止**在未验证新库查询正确前删除旧库备份(需求#14)。备份文件 `.bak.<timestamp>` 需用户显式确认后才能删除。
 
 ## 完整流程链路
 
@@ -72,6 +76,8 @@ create（创建工程）→ fix（修复错误）→ test（测试验证）
 | ModelScope 模型下载失败 | 重试 + 镜像源配置 | 提示用户手动下载或切换 openai:// 云端模型 |
 | MCP 未安装（test） | 提示用户手动 `npm i -g @deveco-codegenie/mcp` | Linux 无需 MCP，仅静态检查可用 |
 | fix 症状歧义 | 按 error-fixes → runtime-fix → grammar 顺序 fallback | 询问用户提供更明确症状 |
+
+> 🔴 **CHECKPOINT**：fix 子命令的 runtime-fix 轨道执行 `hdc` 命令(faultlog/hilog 采集)前 MUST 确认目标设备序列号正确。`hdc -t <serial> shell ...` 误操作可能影响生产设备。Linux 平台 hdc 工具不可用,自动降级为日志文件解析模式。
 
 ## 禁止事项（反例黑名单）
 
