@@ -52,6 +52,38 @@ flowchart TD
 
 进入子命令后，按其流程文档执行。检查点、边界情形、交付核对清单均在各子命令文档内 —— **本路由器不含流程主体**。
 
+## 快速命令参考
+
+```bash
+# create
+node scripts/create/copy-template.mjs --name <ProjectName> --out <输出目录> [--api-level <N>]
+
+# fix（三轨道: 编译错误→error-fixes/ | 运行时→parse-jscrash-log.mjs | 语法→grammar/+dev-rules.md）
+node scripts/fix/parse-jscrash-log.mjs --file <faultlog> [--source hilog|faultlogger]
+node scripts/fix/diagnose-build-error.mjs --log <hvigor-build.log>
+
+# test
+python3 -m scripts.test.cli check                                    # 检测平台 + MCP
+python3 -m scripts.test.cli run --ets-files <dir>                    # Linux 静态检查
+python3 -m scripts.test.cli run --bundle-name <name> --test-plan <p> # Win/macOS 模拟器
+
+# kb（7 子动作）
+python3 -m scripts.kb.cli query "<关键词>" [--top-k 5]
+python3 -m scripts.kb.cli build
+python3 -m scripts.kb.cli merge --other <other.qdrant>
+python3 -m scripts.kb.cli reindex --force
+python3 -m scripts.kb.cli update-description <id> "<desc>"
+python3 -m scripts.kb.cli update-links --id <id> --content "<markdown>"
+python3 -m scripts.kb.cli config
+
+# search
+python3 -m scripts.search.search "<关键词>" [--endpoint developer|device] [--catalog <X>]
+python3 -m scripts.search.detail <object_id|url> <catalog>
+
+# 一键重建预构建库（切换 embed_model 后必跑）
+python3 scripts/kb/build_db.py
+```
+
 ## 通用规则
 
 ### 前置检查：DevEco MCP 配置（需求#3）
