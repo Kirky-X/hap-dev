@@ -46,3 +46,14 @@ data/harmonyos.qdrant/.lock
 .pytest_cache/
 .coverage
 htmlcov/
+
+# OpenSpec 工作流产物（设计文档，不入仓库）
+openspec/
+
+# 测试代码（开发期使用，不入仓库）
+scripts/**/tests/
+
+# Darwin skill 优化产物（开发期使用，不入仓库）
+results.tsv
+test-prompts.json
+darwin-result-card.png

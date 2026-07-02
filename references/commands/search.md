@@ -1,8 +1,6 @@
 # search 子命令 —— 双端点在线文档搜索
 
-双端点（developer + device）多 catalog 路由，HTML→Markdown 清洗。**所有文档访问必须经此子命令脚本**，禁止 agent 直接 `WebFetch`（参见 SKILL.md "禁止事项 #1"）。
-
-> 🔴 **CHECKPOINT**：所有鸿蒙文档正文访问 MUST 经 `python3 scripts/search/search.py` 或 `python3 scripts/search/detail.py`。直接 `WebFetch` 即违规。
+双端点（developer + device）多 catalog 路由，HTML→Markdown 清洗。推荐经此子命令脚本访问文档正文（kb 的 description/links 回填也走此通道）。
 
 > 🔴 **端点来源**：端点 host / path / catalog 列表从 `config.json` 的 `endpoints` 字段读，`scripts/search/_http.py` 提供常量与 fallback。本文档不重复硬编码 host/path，请以 `config.json` 为准。
 
@@ -69,7 +67,7 @@ python3 scripts/search/detail.py <object_id> <catalog_name>
 
 > detail 命令**仅** 支持 developer 端点 catalog；device 端点文档目前无 detail 接口。
 
-> 🔴 **detail 是唯一合法文档访问通道**：禁止 agent 直接 `WebFetch` 鸿蒙文档；禁止从 `url` 字段直接抓取。所有正文获取必须经 `detail.py`。
+> 🔴 **detail 是 search 子命令的正文获取通道**：`detail.py` 负责 HTML→Markdown 清洗与 anchors 提取，kb 的 description/links 回填都走此通道。
 
 ## 输出格式
 
@@ -152,31 +150,23 @@ python3 scripts/search/detail.py <object_id> <catalog_name>
 
 ## 工作流
 
+```mermaid
+flowchart TD
+    S1["1. search(keyword)<br/>选 catalog / endpoint（按意图路由表）"]
+    S1 --> C1{total > 0?}
+    C1 -->|YES| S2["2. 展示结果列表<br/>不自动取详情<br/>询问用户想查看哪个文档"]
+    C1 -->|NO| R1["换关键词重试<br/>agent 层最多 2 次"]
+    R1 --> C2{有结果?}
+    C2 -->|有结果| S2
+    C2 -->|仍无结果| END["告知用户<br/>建议直访 developer.huawei.com"]
+    S2 --> S3["3. 用户选定 → detail(object_id, catalog)"]
+    S3 --> C3{content 非空?}
+    C3 -->|是| S4["4. 输出 Markdown<br/>content > 3000 字: 先展示 anchors 目录<br/>用户问特定章节: 按 anchors 定位截取<br/>用户要完整文档: 直接输出 content"]
+    C3 -->|否| END2["告知用户并提供 url"]
+    S4 --> S5["5. kb 协同: 回填 description + 提取链接<br/>needs_description=True → 回填 description<br/>取正文后 → update-links 双向链接"]
 ```
-1. search(keyword)
-   ├── 选 catalog / endpoint（按意图路由表）
-   └── total > 0 ?
-        ├── YES → 进入步骤 2
-        └── NO  → 换关键词重试（agent 层最多 2 次）
-             ├── 有结果 → 进入步骤 2
-             └── 仍无结果 → 告知用户，建议直访 developer.huawei.com
 
-2. 展示结果列表
-   - 不自动取详情
-   - 询问用户想查看哪个文档
-
-3. 用户选定 → detail(object_id, catalog)
-   - content 非空 ? 进入步骤 4 : 告知用户并提供 url
-
-4. 输出 Markdown
-   - content > 3000 字：先展示 anchors 目录让用户选章节
-   - 用户问特定章节：按 anchors 定位截取
-   - 用户要完整文档：直接输出 content
-
-5. （kb 协同）回填 description + 提取链接
-   - 命中文档若 needs_description=True → 回填 description（详见 kb.md 懒填充流程）
-   - 取正文后 → update-links 双向链接
-```
+> 文字步骤速查：1) search(keyword) 选 catalog/endpoint → 2) 展示列表让用户选 → 3) detail(object_id, catalog) 取正文 → 4) 输出 Markdown（长文档先给 anchors 目录）→ 5) kb 协同回填 description + update-links 双向链接。
 
 ## 关键词选择策略
 
