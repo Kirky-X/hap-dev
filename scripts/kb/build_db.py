@@ -22,6 +22,11 @@ ids and ModelScope — the actual published model is ``paraphrase-MiniLM-L3-v2``
 The script reuses ``cli.make_embedder`` / ``cli.make_indexer`` /
 ``sidebar_parser.parse_all_sidebars`` so behaviour stays consistent with
 ``python3 -m scripts.kb.cli build`` — single source of truth (Rule 8).
+
+B11: persists build metadata to ``<db_path>.meta.json`` after a successful
+build. The meta file records embed_model, embed_dim, built_at, doc_count,
+content_hashes, etc., so callers (query, reindex, CLI) can detect stale DBs
+without re-scanning the whole collection.
 """
 from __future__ import annotations
 
@@ -29,6 +34,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +47,11 @@ if __package__ in (None, ""):
 from scripts.kb import cli  # noqa: E402
 from scripts.kb.config import DEFAULT_CONFIG, ensure_config, load_config  # noqa: E402
 from scripts.kb.sidebar_parser import parse_all_sidebars  # noqa: E402
+
+# B11: meta file schema version. Bump when the on-disk meta format changes
+# (so readers can detect old formats and migrate / refuse).
+META_VERSION = 1
+META_SUFFIX = ".meta.json"
 
 
 def _format_size(n: int) -> str:
@@ -82,6 +93,54 @@ def _load_cfg(config_arg: str | None) -> dict[str, Any]:
     return cfg
 
 
+def write_build_meta(
+    db_path: str,
+    stats: dict[str, Any],
+    content_hashes: set[str] | list[str],
+    embed_dim: int,
+) -> dict[str, Any]:
+    """B11: persist build metadata to ``<db_path>.meta.json``.
+
+    Records: embed_model, embed_dim, built_at, doc_count, collection,
+    content_hashes (sorted list, deduped), meta_version.
+
+    `stats` is the dict returned by `build_database` (must contain
+    `embed_model`, `collection`, `built`). `content_hashes` is the set of
+    per-doc content_hash values — stored so a future reindex can detect
+    sidebars drift (re-parse sidebars, compare hash sets).
+    """
+    meta_path = Path(f"{db_path}{META_SUFFIX}")
+    hashes_sorted = sorted(set(content_hashes))
+    meta = {
+        "meta_version": META_VERSION,
+        "embed_model": stats.get("embed_model", ""),
+        "embed_dim": embed_dim,
+        "collection": stats.get("collection", ""),
+        "doc_count": stats.get("built", 0),
+        "built_at": datetime.now(timezone.utc).isoformat(),
+        "content_hashes": hashes_sorted,
+    }
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return meta
+
+
+def read_build_meta(db_path: str) -> dict[str, Any] | None:
+    """B11: read build metadata written by `write_build_meta`.
+
+    Returns None if the meta file is absent (e.g. legacy DB built before B11).
+    Callers should treat None as "unknown — re-scan DB to be safe".
+    """
+    meta_path = Path(f"{db_path}{META_SUFFIX}")
+    if not meta_path.exists():
+        return None
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        # corrupt meta — treat as missing (caller re-scans DB)
+        return None
+
+
 def build_database(config_arg: str | None = None,
                    sidebars_override: str | None = None) -> dict[str, Any]:
     """Build the index and return a stats dict (also used by tests)."""
@@ -117,6 +176,9 @@ def build_database(config_arg: str | None = None,
         "embed_model": cfg.get("embed_model", ""),
         "collection": cfg.get("collection", ""),
     }
+    # B11: persist build meta so future runs can detect staleness
+    content_hashes = {d.get("content_hash", "") for d in docs}
+    write_build_meta(db_path, stats, content_hashes, embed_dim=cfg.get("embed_dim", 384))
     return stats
 
 

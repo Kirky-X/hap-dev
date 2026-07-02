@@ -21,6 +21,18 @@ from .sidebar_parser import NO_DESCRIPTION
 # be ints or UUIDs, so we keep the sha1 in payload and derive an int point id.
 ID_FIELD = "id"
 
+# B9: whitelist of payload fields set_payload is allowed to write. Any field
+# outside this set is rejected with ValueError (Rule 12: fail loud) — prevents
+# callers from polluting the payload schema or bypassing upsert for vector-
+# bearing fields like 'title' (whose change MUST go through upsert to refresh
+# the vector). NB: 'title' is in the whitelist because links.py / merge.py
+# legitimately write it via set_payload when merging. The vector is NOT in
+# this set because set_payload never touches the vector by design.
+PAYLOAD_FIELDS = frozenset({
+    "id", "title", "doc_type", "url", "description",
+    "links", "created_at", "updated_at", "content_hash", "embed_model",
+})
+
 
 def _point_id(doc_id: str) -> int:
     """Stable uint64 point id from the first 16 hex chars of the sha1 id."""
@@ -72,10 +84,27 @@ class QdrantIndexer:
 
         B1: each doc's payload is stamped with `embedder.model_name` so the
         stored vector's *identity* (not just its dim) is auditable later.
+
+        B12: detects point_id collisions within the batch (two different doc_ids
+        whose first 16 hex chars coincide) and raises ValueError — silent
+        overwrite would lose data without notice (Rule 12: fail loud).
         """
         self._ensure_collection(recreate=True)
         if not docs:
             return
+        # B12: pre-flight collision check within this batch.
+        seen: dict[int, str] = {}  # point_id -> doc_id
+        for d in docs:
+            pid = _point_id(d["id"])
+            prev = seen.get(pid)
+            if prev is not None and prev != d["id"]:
+                raise ValueError(
+                    f"point_id collision in build batch: docs {prev!r} and "
+                    f"{d['id']!r} both map to point_id={pid} (first 16 hex "
+                    f"chars of their sha1 ids coincide). Refusing to silently "
+                    f"overwrite — rebuild with non-colliding ids."
+                )
+            seen[pid] = d["id"]
         # Stamp the embedder's model_name onto every doc — this is the single
         # source of truth for "which model produced this vector". A doc dict
         # arriving with a stale embed_model (e.g. from an old config) is
@@ -103,15 +132,34 @@ class QdrantIndexer:
         """Insert or overwrite a single doc; (re)compute its vector.
 
         B1: stamps `embedder.model_name` into the doc before writing.
+
+        B12: detects point_id collisions at runtime — if a point with the same
+        point_id already exists but its payload `id` field differs from the
+        incoming doc's id, raises ValueError. Silent overwrite would lose the
+        existing doc's vector+payload. Re-upserting the SAME doc_id is idempotent
+        and allowed.
         """
         self._ensure_collection(recreate=False)
+        # B12: collision check — read existing point at this point_id (if any)
+        # and verify its payload id matches the incoming doc_id.
+        pid = _point_id(doc["id"])
+        existing = self._read_point_by_pid(pid, with_payload=True, with_vectors=False)
+        if existing is not None:
+            existing_id = (existing.payload or {}).get(ID_FIELD)
+            if existing_id != doc["id"]:
+                raise ValueError(
+                    f"point_id collision in upsert: existing doc {existing_id!r} "
+                    f"and incoming doc {doc['id']!r} both map to point_id={pid} "
+                    f"(first 16 hex chars of their sha1 ids coincide). Refusing "
+                    f"to silently overwrite — use distinct urls/ids."
+                )
         doc["embed_model"] = embedder.model_name
         vec = embedder.embed(_embed_text(doc))
         if len(vec) != self.dim:
             raise ValueError(
                 f"embedding dim {len(vec)} != collection dim {self.dim}"
             )
-        point = qm.PointStruct(id=_point_id(doc["id"]), vector=vec, payload=self._payload(doc))
+        point = qm.PointStruct(id=pid, vector=vec, payload=self._payload(doc))
         self.client.upsert(collection_name=self.collection, points=[point])
 
     def _payload(self, doc: dict[str, Any]) -> dict[str, Any]:
@@ -197,8 +245,27 @@ class QdrantIndexer:
         """Update payload fields of an existing doc in place, WITHOUT touching
         its vector. Used by links.py to write bidirectional links / refreshed
         updated_at without re-embedding (the spec's update_links signature takes
-        no embedder). Raises if the point doesn't exist (Rule 12: fail loud)."""
+        no embedder). Raises if the point doesn't exist (Rule 12: fail loud).
+
+        B9: only fields in PAYLOAD_FIELDS are accepted. Unknown fields raise
+        ValueError — prevents schema pollution and prevents callers from
+        bypassing upsert for vector-bearing fields (e.g. writing 'title'
+        without refreshing the vector). Empty `fields` is rejected as a
+        no-op call (Rule 12: fail loud on meaningless operations).
+        """
         self._ensure_collection(recreate=False)
+        if not fields:
+            raise ValueError(
+                "set_payload: no fields to set (empty dict) — caller error"
+            )
+        unknown = set(fields) - PAYLOAD_FIELDS
+        if unknown:
+            raise ValueError(
+                f"set_payload: unknown payload field(s) {sorted(unknown)!r} — "
+                f"allowed: {sorted(PAYLOAD_FIELDS)}. To change a vector-bearing "
+                f"field (title/description/doc_type/url), use upsert() to also "
+                f"refresh the embedding."
+            )
         existing = self.get(doc_id)
         if existing is None:
             raise KeyError(f"cannot set_payload: doc_id not in index: {doc_id}")
@@ -263,6 +330,28 @@ class QdrantIndexer:
         for d in self.list_all():
             models.add(d.get("embed_model", ""))
         return models
+
+    def _read_point_by_pid(self, pid: int,
+                            with_payload: bool = True,
+                            with_vectors: bool = False) -> Any:
+        """B12: fetch a single Qdrant point by its uint64 point id, or None.
+
+        Used by upsert's collision check — direct point_id lookup is faster
+        than the payload-filtered scroll in `get()` (no index required).
+        """
+        try:
+            res = self.client.retrieve(
+                collection_name=self.collection,
+                ids=[pid],
+                with_payload=with_payload,
+                with_vectors=with_vectors,
+            )
+        except Exception:
+            # collection may not exist yet (first upsert) — treat as no point
+            return None
+        if not res:
+            return None
+        return res[0]
 
     @classmethod
     def _point_to_doc(cls, point: Any, include_vector: bool = True) -> dict[str, Any]:

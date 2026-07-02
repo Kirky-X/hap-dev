@@ -14,14 +14,72 @@ Flow:
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from .sidebar_parser import NO_DESCRIPTION
 
+# B8: hybrid tokenizer — English words as whole tokens, Chinese as chars.
+# Original char-level `[c for c in text]` split 'ArkTS' into ['A','r','k','T','S'],
+# destroying BM25 discrimination for English terms. New approach:
+#   1. split on whitespace + punctuation (preserving ASCII word chars + digits + hyphen)
+#   2. for each chunk, if it's ASCII (English/digits) keep as one token;
+#      if it contains CJK, split to individual chars (Chinese has no word delimiter)
+#   3. drop empty strings
+#
+# ASCII word char class: [A-Za-z0-9_-] (underscore + hyphen join compound tokens
+# like 'errorcode-123' or 'UIAbility_2'). Everything else is a separator.
+_ASCII_WORD_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _is_cjk(ch: str) -> bool:
+    """True if ch is a CJK ideograph (Han script) or CJK punctuation."""
+    if not ch:
+        return False
+    cp = ord(ch)
+    # CJK Unified Ideographs + extensions A/B/C/D/E/F + CJK punctuation
+    return (
+        0x4E00 <= cp <= 0x9FFF      # CJK Unified Ideographs
+        or 0x3400 <= cp <= 0x4DBF   # CJK Extension A
+        or 0x20000 <= cp <= 0x2A6DF  # CJK Extension B
+        or 0x2A700 <= cp <= 0x2B73F  # CJK Extension C
+        or 0x2B740 <= cp <= 0x2B81F  # CJK Extension D
+        or 0x2B820 <= cp <= 0x2CEAF  # CJK Extension E
+        or 0x2CEB0 <= cp <= 0x2EBEF  # CJK Extension F
+        or 0x3000 <= cp <= 0x303F    # CJK Symbols and Punctuation
+        or 0xFF00 <= cp <= 0xFFEF    # Halfwidth/Fullwidth Forms
+    )
+
 
 def _tokenize(text: str) -> list[str]:
-    """Char-level tokenizer — works for Chinese without jieba (per spec)."""
-    return [c for c in text if not c.isspace()]
+    """B8: hybrid tokenizer.
+
+    English/digit words (including hyphenated compounds) → whole tokens.
+    CJK characters → individual char tokens.
+    All other chars (whitespace, punctuation) → separators, dropped.
+
+    This preserves BM25 discrimination for English terms (ArkTS, UIAbility,
+    harmonyos, errorcode-123) while keeping Chinese char-level granularity
+    (no jieba dependency, per spec).
+    """
+    if not text:
+        return []
+    tokens: list[str] = []
+    # Extract maximal ASCII word runs first; the gaps between them are scanned
+    # for CJK chars (so Chinese text adjacent to English is still tokenized).
+    pos = 0
+    for m in _ASCII_WORD_RE.finditer(text):
+        # gap before this ASCII word — scan for CJK
+        for ch in text[pos:m.start()]:
+            if _is_cjk(ch):
+                tokens.append(ch)
+        tokens.append(m.group())
+        pos = m.end()
+    # tail after last ASCII word — scan for CJK
+    for ch in text[pos:]:
+        if _is_cjk(ch):
+            tokens.append(ch)
+    return tokens
 
 
 def _minmax(values: list[float]) -> list[float]:

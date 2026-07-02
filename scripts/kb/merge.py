@@ -75,8 +75,24 @@ def _dedupe(items: list[str]) -> list[str]:
 
 
 def _merge_two(a: dict[str, Any], b: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Merge two docs with the same id. Returns (merged_doc, needs_reindex)."""
-    a_newer = a["updated_at"] >= b["updated_at"]
+    """Merge two docs with the same id. Returns (merged_doc, needs_reindex).
+
+    B10: deterministic tie-break. When updated_at is equal, the original code
+    preferred `a` unconditionally — but `a`/`b` assignment depends on
+    `set(docs_a) | set(docs_b)` iteration order (undefined), so the same input
+    could yield different merges across runs. Now we use doc_id as a
+    deterministic tie-breaker: lower id wins on ties. This makes _merge_two
+    symmetric — _merge_two(a, b) and _merge_two(b, a) produce identical results.
+    """
+    a_ts = a["updated_at"]
+    b_ts = b["updated_at"]
+    if a_ts > b_ts:
+        a_newer = True
+    elif a_ts < b_ts:
+        a_newer = False
+    else:
+        # B10: tie — lower doc_id wins (deterministic regardless of arg order)
+        a_newer = a["id"] < b["id"]
 
     a_desc = a.get("description", NO_DESCRIPTION)
     b_desc = b.get("description", NO_DESCRIPTION)
