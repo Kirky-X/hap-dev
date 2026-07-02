@@ -18,6 +18,20 @@ license: MIT
 
 > 🔴 **CHECKPOINT**：禁止 agent 直接 WebFetch 访问鸿蒙文档。所有文档正文访问必须经 `search detail` 脚本（需求#12）。
 
+**TL;DR 决策树**(快速路由,完整流程见下表):
+
+```
+用户意图
+├─ "创建/新建工程"           → create  (copy-template.mjs)
+├─ "编译报错/build 失败"     → fix     (error-fixes 轨道)
+├─ "崩溃/白屏/jscrash"       → fix     (runtime-fix 轨道)
+├─ "语法对不对/TS 差异"      → fix     (grammar 轨道)
+├─ "测试/构建/启动模拟器"    → test    (platform.py 检测)
+├─ "查本地知识库/语义检索"   → kb      (query,默认 top-5)
+├─ "在线查文档/API/指南"     → search  (双端点路由)
+└─ "知识库管理/切换模型/合并"→ kb      (build/merge/reindex)
+```
+
 | 用户意图                                    | 子命令   | 完整流程                                                          |
 | ------------------------------------------- | -------- | ----------------------------------------------------------------- |
 | 创建 / 新建 ArkTS 工程（从零/脚手架）       | create   | [`references/commands/create.md`](references/commands/create.md) |
@@ -35,7 +49,7 @@ license: MIT
 ## 通用规则
 
 ### 禁止直接 fetch（需求#12）
-所有鸿蒙文档访问 MUST 经 `python3 scripts/search/search.py` 或 `python3 scripts/search/detail.py` 脚本，禁止 agent 直接 WebFetch。此规则在 search 子命令脚本就绪后强制执行。
+所有鸿蒙文档访问 MUST 经 `python3 scripts/search/search.py` 或 `python3 scripts/search/detail.py` 脚本执行(详见"禁止事项"第 1 条)。
 
 ### 平台检测（需求#3）
 test 子命令经 `python3 -m scripts.test.cli check` 检测平台。Linux 仅静态检查；Windows/macOS 启用模拟器全功能。模拟器工具在 Linux 显式禁用并提示用户。
@@ -46,8 +60,12 @@ test 子命令经 `python3 -m scripts.test.cli check` 检测平台。Linux 仅�
 - embed_model 为默认值且 data/harmonyos.qdrant 存在 → 直接用预构建库，不重算向量。
 - embed_model 非默认 → 下载模型 + 全量重索引。
 
+> 🔴 **CHECKPOINT**：修改 `embed_model` / `embed_dim` 后 MUST 运行 `python3 scripts/kb/build_db.py` 全量重建向量库。未重建直接 query 会因维度不匹配报错。此规则同样适用于 `rerank_model` 切换后未 reindex 的情况。
+
 ### description 懒填充（需求#6）
 kb query 命中文档但 description=="无描述"时，agent 调 `search detail <url>` 取正文 → 生成 ≤200 字 description → 调 `kb update-description <id> "<desc>"` 回填 + 重算向量。
+
+> 🔴 **CHECKPOINT**：`kb merge` 完成后,新库需 `reindex --force` 刷新 description 变化文档的向量。**禁止**在未验证新库查询正确前删除旧库备份(需求#14)。备份文件 `.bak.<timestamp>` 需用户显式确认后才能删除。
 
 ## 完整流程链路
 
@@ -72,6 +90,8 @@ create（创建工程）→ fix（修复错误）→ test（测试验证）
 | ModelScope 模型下载失败 | 重试 + 镜像源配置 | 提示用户手动下载或切换 openai:// 云端模型 |
 | MCP 未安装（test） | 提示用户手动 `npm i -g @deveco-codegenie/mcp` | Linux 无需 MCP，仅静态检查可用 |
 | fix 症状歧义 | 按 error-fixes → runtime-fix → grammar 顺序 fallback | 询问用户提供更明确症状 |
+
+> 🔴 **CHECKPOINT**：fix 子命令的 runtime-fix 轨道执行 `hdc` 命令(faultlog/hilog 采集)前 MUST 确认目标设备序列号正确。`hdc -t <serial> shell ...` 误操作可能影响生产设备。Linux 平台 hdc 工具不可用,自动降级为日志文件解析模式。
 
 ## 禁止事项（反例黑名单）
 
