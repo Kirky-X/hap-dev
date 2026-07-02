@@ -49,19 +49,40 @@ def _make_id(url: str) -> str:
     return hashlib.sha1(url.encode("utf-8")).hexdigest()
 
 
-def _make_content_hash(title: str, url: str, doc_type: str) -> str:
-    raw = (title + url + doc_type).encode("utf-8")
+def _make_content_hash(
+    title: str,
+    url: str,
+    doc_type: str,
+    description: str = NO_DESCRIPTION,
+    links: list[str] | None = None,
+) -> str:
+    """Content fingerprint = sha1 over the doc's *content-bearing* fields.
+
+    First-Principles fact F2: content_hash exists to flag docs that need
+    re-embedding. Since description is the primary embedding source (design
+    D2: embed from description when backfilled, else title), a description
+    change MUST change the hash. links are included because they affect
+    payload consistency (merge inspects them). Order-invariant on links
+    (sorted) — membership is what counts, not insertion order.
+    """
+    sorted_links = sorted(links) if links else []
+    raw = (
+        title + url + doc_type + description
+        + "|links:" + ",".join(sorted_links)
+    ).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()
 
 
 def parse_sidebar(path: str, doc_type: str) -> list[dict[str, Any]]:
     """Parse a sidebar markdown file into a list of doc records.
 
-    Each record has the 9-field schema:
-      id, title, doc_type, url, description, embedding(missing, set by indexer),
-      links, created_at, updated_at, content_hash.
-    `embedding` is intentionally NOT set here — the indexer computes it from
-    `title` (or `description` after backfill).
+    Each record has the 10-field schema (after B1+B4 upgrade):
+      id, title, doc_type, url, description, links,
+      created_at, updated_at, content_hash, embed_model.
+    `embed_model` is initially "" — the indexer stamps it with the embedder's
+    model_name on build/upsert. `embedding` (the vector) is intentionally NOT
+    set here — the indexer computes it from `title` (or `description` after
+    backfill).
 
     Raises FileNotFoundError if `path` does not exist (Rule 12: fail loud).
     """
@@ -92,7 +113,11 @@ def parse_sidebar(path: str, doc_type: str) -> list[dict[str, Any]]:
                 "links": [],
                 "created_at": now,
                 "updated_at": now,
-                "content_hash": _make_content_hash(title, url, doc_type),
+                "content_hash": _make_content_hash(
+                    title, url, doc_type, NO_DESCRIPTION, [],
+                ),
+                # embed_model is "" until the indexer stamps it on build/upsert
+                "embed_model": "",
             })
     return docs
 

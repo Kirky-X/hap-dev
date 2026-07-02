@@ -69,10 +69,19 @@ class QdrantIndexer:
 
         Idempotent: calling build twice with the same docs yields the same count
         because recreate drops stale points and upsert overwrites by point id.
+
+        B1: each doc's payload is stamped with `embedder.model_name` so the
+        stored vector's *identity* (not just its dim) is auditable later.
         """
         self._ensure_collection(recreate=True)
         if not docs:
             return
+        # Stamp the embedder's model_name onto every doc — this is the single
+        # source of truth for "which model produced this vector". A doc dict
+        # arriving with a stale embed_model (e.g. from an old config) is
+        # overwritten here because the embedder just produced the vector.
+        for d in docs:
+            d["embed_model"] = embedder.model_name
         texts = [_embed_text(d) for d in docs]
         vectors = embedder.embed_batch(texts)
         if len(vectors) != len(docs):
@@ -91,8 +100,12 @@ class QdrantIndexer:
         self.client.upsert(collection_name=self.collection, points=points)
 
     def upsert(self, doc: dict[str, Any], embedder: Any) -> None:
-        """Insert or overwrite a single doc; (re)compute its vector."""
+        """Insert or overwrite a single doc; (re)compute its vector.
+
+        B1: stamps `embedder.model_name` into the doc before writing.
+        """
         self._ensure_collection(recreate=False)
+        doc["embed_model"] = embedder.model_name
         vec = embedder.embed(_embed_text(doc))
         if len(vec) != self.dim:
             raise ValueError(
@@ -102,7 +115,11 @@ class QdrantIndexer:
         self.client.upsert(collection_name=self.collection, points=[point])
 
     def _payload(self, doc: dict[str, Any]) -> dict[str, Any]:
-        """Payload = all schema fields except the vector."""
+        """Payload = all schema fields except the vector.
+
+        B1: includes `embed_model` as the 10th field. Old docs without it
+        read back as "" via `_payload_from` (legacy tolerance).
+        """
         return {
             ID_FIELD: doc["id"],
             "title": doc["title"],
@@ -113,6 +130,7 @@ class QdrantIndexer:
             "created_at": doc["created_at"],
             "updated_at": doc["updated_at"],
             "content_hash": doc["content_hash"],
+            "embed_model": doc.get("embed_model", ""),
         }
 
     # ---- read -------------------------------------------------------------
@@ -224,11 +242,27 @@ class QdrantIndexer:
             "doc_type": payload["doc_type"],
             "url": payload["url"],
             "description": payload.get("description", NO_DESCRIPTION),
-            "links": payload.get("links", []),
+            "links": payload.get("links", []) or [],
             "created_at": payload["created_at"],
             "updated_at": payload["updated_at"],
             "content_hash": payload["content_hash"],
+            # B1: legacy tolerance — pre-B1 docs lack this field; treat as "".
+            # Use `or ""` to also coerce None (left over by some Qdrant ops).
+            "embed_model": payload.get("embed_model") or "",
         }
+
+    def get_embed_models(self) -> set[str]:
+        """B1: return the set of distinct embed_model values in the DB.
+
+        Empty set = no docs. Set with single "" = legacy DB (all docs lack
+        embed_model). Set with multiple non-empty values = mixed DB
+        (cross-model contamination — caller should fail loud).
+        Used by query/merge/reindex to validate model compatibility.
+        """
+        models: set[str] = set()
+        for d in self.list_all():
+            models.add(d.get("embed_model", ""))
+        return models
 
     @classmethod
     def _point_to_doc(cls, point: Any, include_vector: bool = True) -> dict[str, Any]:

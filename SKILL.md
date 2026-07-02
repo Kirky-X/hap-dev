@@ -67,13 +67,15 @@ python3 -m scripts.test.cli check                                    # 检测平
 python3 -m scripts.test.cli run --ets-files <dir>                    # Linux 静态检查
 python3 -m scripts.test.cli run --bundle-name <name> --test-plan <p> # Win/macOS 模拟器
 
-# kb（7 子动作）
+# kb（9 子动作）
 python3 -m scripts.kb.cli query "<关键词>" [--top-k 5]
 python3 -m scripts.kb.cli build
 python3 -m scripts.kb.cli merge --other <other.qdrant>
 python3 -m scripts.kb.cli reindex --force
 python3 -m scripts.kb.cli update-description <id> "<desc>"
 python3 -m scripts.kb.cli update-links --id <id> --content "<markdown>"
+python3 -m scripts.kb.cli link-auto [--threshold 0.9] [--max-per-doc 10]   # B2 余弦>0.9 自动双向链接
+python3 -m scripts.kb.cli migrate-embed-model [--model <name>]              # B1 回填 embed_model
 python3 -m scripts.kb.cli config
 
 # search
@@ -143,6 +145,10 @@ flowchart LR
 | MCP 未安装（test check 报 `MCP 安装: 否`） | 提示 `npm i -g @deveco-codegenie/mcp` + 配置文件注册 | Linux 无需 MCP，仅静态检查可用 |
 | fix 症状歧义 | 按 error-fixes → runtime-fix → grammar 顺序 fallback | 询问用户提供更明确症状（错误码/堆栈/截图） |
 | sidebars/ 解析出 0 条文档 | 检查 sidebars/ 目录是否非空 + JSON 格式是否合法 | 提示用户从 temp/harmonyos-*.md 重新生成 |
+| kb query 报 `embed_model mismatch` | DB 用的模型与当前 config.json `embed_model` 不一致 → 二选一：①改 config.json 回到 DB 模型；②跑 `python3 scripts/kb/build_db.py` 用新模型全量重建 | 同维度不同模型向量空间不兼容，禁止仅改 embed_dim 蒙混 |
+| kb merge 报 `embed_model mismatch` | 两 DB 用了不同 embed_model → 拒绝合并。先对两库分别 reindex 到同一模型再 merge | 已污染库需 `build_db.py` 从 sidebars 重建 |
+| DB docs 缺 `embed_model` 字段（legacy 库） | 跑 `python3 -m scripts.kb.cli migrate-embed-model` 回填 config.json 的 embed_model | 已被多模型污染（mixed）只能 `build_db.py` 重建 |
+| docs `links=[]` 无邻居 | 跑 `python3 -m scripts.kb.cli link-auto` 按 cosine >0.9 自动建立双向链接 | 仍 0 邻居说明 docs 向量彼此正交，检查 embedder 是否正常 |
 
 > 🔴 **CHECKPOINT**：fix 子命令的 runtime-fix 轨道执行 `hdc` 命令(faultlog/hilog 采集)前 MUST 确认目标设备序列号正确。`hdc -t <serial> shell ...` 误操作可能影响生产设备。Linux 平台 hdc 工具不可用,自动降级为日志文件解析模式。
 
@@ -152,6 +158,7 @@ flowchart LR
 2. **禁止跨子命令直连** — create 产出的工程不经 fix/test 验证不算完成；kb 的 description 回填不调 search detail 算违规。
 3. **禁止简化实现** — 双向链接必须真正双向写入；description 回填必须重算向量；合并必须字段级 update_at 比较。
 4. **禁止静默吞错** — 所有脚本错误显式上报（非零退出码/errors 字段/异常），不藏默认值背后。
+5. **禁止跨模型向量空间混用** — 同维度不同 embed_model 的向量空间不兼容（如 384 维 paraphrase-MiniLM-L3-v2 vs all-MiniLM-L6-v2 余弦相似度无意义）。query/merge/reindex 入口 MUST 校验 embed_model 一致；mismatch 时 fail-loud，禁止"维度相同就放过"。新库 MUST 跑 `migrate-embed-model` 回填 embed_model 字段；老库迁移完成后 MUST 跑 `link-auto` 建立默认双向链接。
 
 ## 平台支持矩阵
 

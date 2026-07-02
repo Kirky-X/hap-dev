@@ -2,8 +2,14 @@
 
 merge(db_a_path, db_b_path, out_path, collection) -> dict
 
-Design D8:
+Design D8, with B3 (embed_model compatibility check) and B4 (content_hash
+upgraded to include description+links):
+
   * read all records from both DBs, align by id
+  * B3: validate both DBs were built with the SAME embed_model. A vector's
+    identity is (model_name, dim) — same dim alone is insufficient. If the
+    DBs used different models, raise ValueError (Rule 7: 暴露冲突不折中) —
+    do NOT silently produce a corrupted DB with mixed vector spaces.
   * field-level merge:
       - one side empty / default, other not      -> take the non-empty one
       - both non-empty                            -> take the side with newer updated_at
@@ -11,6 +17,9 @@ Design D8:
       - created_at                                -> earliest
       - updated_at                                -> latest
       - description differs between sides         -> mark needs_reindex=True
+      - embed_model                               -> inherits from source (must agree)
+  * B4: content_hash recomputed via sidebar_parser._make_content_hash (incl.
+    description + sorted links) — single source of truth.
   * write merged docs into a NEW DB at out_path, preserving the source vectors
     (no embedder needed — vectors are copied from the newer source doc)
   * rename the two input DBs to <path>.bak.<timestamp> backups
@@ -20,14 +29,13 @@ backup(paths) and confirm_delete(backup_path) are exposed for the CLI.
 """
 from __future__ import annotations
 
-import hashlib
 import shutil
 import time
 from pathlib import Path
 from typing import Any
 
 from .indexer import QdrantIndexer
-from .sidebar_parser import NO_DESCRIPTION
+from .sidebar_parser import NO_DESCRIPTION, _make_content_hash
 
 # Fields merged by the "non-empty priority, else newer wins" rule.
 _SCALAR_FIELDS = ["title", "doc_type", "url", "description"]
@@ -85,10 +93,18 @@ def _merge_two(a: dict[str, Any], b: dict[str, Any]) -> tuple[dict[str, Any], bo
     merged["created_at"] = min(a["created_at"], b["created_at"])
     merged["updated_at"] = max(a["updated_at"], b["updated_at"])
 
-    # content_hash: recompute from merged identity fields
-    merged["content_hash"] = hashlib.sha1(
-        (merged["title"] + merged["url"] + merged["doc_type"]).encode("utf-8")
-    ).hexdigest()
+    # B4: content_hash recomputed via the single source of truth (includes
+    # description + sorted links), so a description change is detectable.
+    merged["content_hash"] = _make_content_hash(
+        merged["title"], merged["url"], merged["doc_type"],
+        merged.get("description", NO_DESCRIPTION),
+        merged["links"],
+    )
+
+    # B1: embed_model inherits from the newer source doc. The merge() entry
+    # point already validated both DBs use the same model, so a and b agree.
+    merged["embed_model"] = (a.get("embed_model") if a_newer
+                             else b.get("embed_model", ""))
 
     # vector: take from the newer source doc (its vector matches its newer state)
     a_vec = a.get("embedding")
@@ -96,6 +112,41 @@ def _merge_two(a: dict[str, Any], b: dict[str, Any]) -> tuple[dict[str, Any], bo
     merged["embedding"] = (a_vec if a_newer else b_vec)
 
     return merged, needs_reindex
+
+
+def _validate_model_compatibility(
+    models_a: set[str], models_b: set[str],
+    db_a_path: str, db_b_path: str,
+) -> None:
+    """B3: raise ValueError if the two DBs used different embed_models.
+
+    Empty sets (legacy DBs without embed_model field) are treated as
+    "unknown" — compatible with anything, so legacy DBs can still be merged
+    with each other and with stamped DBs. Once both DBs have real model
+    values, they must agree.
+    """
+    real_a = {m for m in models_a if m}
+    real_b = {m for m in models_b if m}
+    if not real_a or not real_b:
+        return  # at least one is legacy — allow (migrate-embed-model handles it)
+    if real_a != real_b:
+        raise ValueError(
+            f"merge: embed_model mismatch — DB A {db_a_path!r} used {real_a!r}, "
+            f"DB B {db_b_path!r} used {real_b!r}. Merging would mix vector "
+            f"spaces; cosine scores would become meaningless. Re-embed one DB "
+            f"with the other's model first (reindex --force with the target "
+            f"embed_model in config.json)."
+        )
+    if len(real_a) > 1:
+        raise ValueError(
+            f"merge: DB A {db_a_path!r} contains mixed embed_models {real_a!r} "
+            f"— already contaminated, refusing to merge. Rebuild from sidebars."
+        )
+    if len(real_b) > 1:
+        raise ValueError(
+            f"merge: DB B {db_b_path!r} contains mixed embed_models {real_b!r} "
+            f"— already contaminated, refusing to merge. Rebuild from sidebars."
+        )
 
 
 def merge(
@@ -108,12 +159,20 @@ def merge(
     """Merge two local Qdrant DBs into a new one at out_path.
 
     Returns {merged_count, backups, needs_reindex_count}.
+
+    B3: raises ValueError if the two DBs were built with different embed_models.
     """
     # Read both source DBs (with vectors so we can copy them).
     idx_a = QdrantIndexer(db_path=db_a_path, collection=collection, dim=dim)
     idx_b = QdrantIndexer(db_path=db_b_path, collection=collection, dim=dim)
     docs_a = {d["id"]: d for d in idx_a.list_all(with_vectors=True)}
     docs_b = {d["id"]: d for d in idx_b.list_all(with_vectors=True)}
+
+    # B3: validate embed_model compatibility BEFORE writing any merged output.
+    models_a = {d.get("embed_model", "") for d in docs_a.values()}
+    models_b = {d.get("embed_model", "") for d in docs_b.values()}
+    _validate_model_compatibility(models_a, models_b, db_a_path, db_b_path)
+
     idx_a.close()
     idx_b.close()
 

@@ -1,4 +1,4 @@
-"""Unified CLI entrypoint for the kb submodule (task 4.18).
+"""Unified CLI entrypoint for the kb submodule (task 4.18 + B7 link-auto/migrate).
 
 Usage:
     python3 -m scripts.kb.cli <action> [options]
@@ -10,6 +10,8 @@ Actions:
     reindex              --force
     update-description   --id --description
     update-links         --id --content
+    link-auto            --threshold --max-per-doc     (B2)
+    migrate-embed-model  [--model <name>]              (B1 migration)
     config               (print current config)
 
 db_path / collection / sidebars_dir / embed_model all come from config.json —
@@ -29,6 +31,7 @@ from .config import DEFAULT_CONFIG, ensure_config, load_config
 from .embed import Embedder
 from .indexer import QdrantIndexer
 from .links import update_links
+from .links_auto import auto_link
 from .merge import merge as do_merge
 from .query import query as do_query
 from .reindex import reindex as do_reindex
@@ -36,7 +39,7 @@ from .sidebar_parser import parse_all_sidebars
 from .update_description import update_description
 
 ACTIONS = ("query", "build", "merge", "reindex", "update-description",
-           "update-links", "config")
+           "update-links", "link-auto", "migrate-embed-model", "config")
 
 
 # ---- factories (kept module-level so tests can monkeypatch them) -----------
@@ -111,6 +114,21 @@ def build_parser() -> argparse.ArgumentParser:
     ul.add_argument("--content", required=True,
                     help="doc body markdown, or a path to a file containing it")
     ul.add_argument("--config", default=None)
+
+    la = sub.add_parser("link-auto",
+                        help="auto-link docs by vector cosine similarity (B2)")
+    la.add_argument("--threshold", type=float, default=0.9,
+                    help="cosine similarity above which two docs are linked")
+    la.add_argument("--max-per-doc", type=int, default=10,
+                    help="cap on each doc's link list")
+    la.add_argument("--config", default=None)
+
+    me = sub.add_parser("migrate-embed-model",
+                        help="backfill embed_model field on legacy docs (B1)")
+    me.add_argument("--model", default=None,
+                    help="override the model name to stamp "
+                         "(defaults to config.json's embed_model)")
+    me.add_argument("--config", default=None)
 
     c = sub.add_parser("config", help="print the effective config")
     c.add_argument("--config", default=None)
@@ -209,6 +227,87 @@ def _run_config(args: argparse.Namespace) -> Any:
     return cfg
 
 
+def _run_link_auto(args: argparse.Namespace) -> Any:
+    """B2: auto-link docs by vector cosine similarity > threshold."""
+    cfg = _load_cfg(args.config)
+    idx = make_indexer(cfg)
+    try:
+        stats = auto_link(
+            idx,
+            threshold=args.threshold,
+            max_per_doc=args.max_per_doc,
+        )
+    finally:
+        idx.close()
+    out = {
+        "pairs_linked": stats["pairs_linked"],
+        "docs_scanned": stats["docs_scanned"],
+        "threshold": args.threshold,
+        "max_per_doc": args.max_per_doc,
+    }
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
+
+
+def _run_migrate_embed_model(args: argparse.Namespace) -> Any:
+    """B1 migration: stamp embed_model onto legacy docs that lack it.
+
+    Reads the DB's current embed_model set:
+      - if all docs have the same non-empty value → no-op (already migrated)
+      - if all docs have empty embed_model (legacy) → stamp config.embed_model
+      - if mixed → refuse (Run handler's stderr message explains recovery)
+    """
+    cfg = _load_cfg(args.config)
+    target_model = args.model or cfg.get("embed_model", "")
+    if not target_model:
+        raise ValueError(
+            "migrate-embed-model: no model to stamp — pass --model or set "
+            "embed_model in config.json"
+        )
+    idx = make_indexer(cfg)
+    try:
+        docs = idx.list_all()
+        if not docs:
+            out = {"migrated": 0, "skipped": 0, "model": target_model, "note": "empty DB"}
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+            return out
+        models = {d.get("embed_model", "") for d in docs}
+        real_models = {m for m in models if m}
+        if len(real_models) > 1:
+            raise RuntimeError(
+                f"migrate-embed-model: DB already contains mixed embed_models "
+                f"{real_models!r} — contaminated, refusing to migrate. "
+                f"Rebuild from sidebars: `python3 scripts/kb/build_db.py`."
+            )
+        if len(real_models) == 1 and next(iter(real_models)) != target_model:
+            existing = next(iter(real_models))
+            raise RuntimeError(
+                f"migrate-embed-model: DB already stamped with {existing!r} "
+                f"but config says {target_model!r}. Either revert config.json "
+                f"to {existing!r}, or run `python3 scripts/kb/build_db.py` to "
+                f"rebuild with {target_model!r}."
+            )
+        if len(real_models) == 1:
+            # All docs already stamped with target_model — nothing to do
+            out = {
+                "migrated": 0, "skipped": len(docs),
+                "model": target_model,
+                "note": "all docs already have embed_model",
+            }
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+            return out
+        # All docs have empty embed_model (legacy) — stamp target_model
+        migrated = 0
+        for d in docs:
+            idx.set_payload(d["id"], {"embed_model": target_model})
+            migrated += 1
+        out = {"migrated": migrated, "skipped": 0, "model": target_model}
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return out
+    finally:
+        idx.close()
+
+
 _DISPATCH = {
     "query": _run_query,
     "build": _run_build,
@@ -216,6 +315,8 @@ _DISPATCH = {
     "reindex": _run_reindex,
     "update-description": _run_update_description,
     "update-links": _run_update_links,
+    "link-auto": _run_link_auto,
+    "migrate-embed-model": _run_migrate_embed_model,
     "config": _run_config,
 }
 

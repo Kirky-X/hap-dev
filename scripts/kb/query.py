@@ -1,13 +1,16 @@
 """Hybrid query: vector + BM25 fusion with optional rerank (tasks 4.8-4.9).
 
 Flow:
-  1. embed the question
-  2. Qdrant vector search over top_k*3 candidates (optionally filtered by doc_type)
-  3. BM25Okapi over the candidates' ``title + description`` (char-level tokenize so
+  1. B5: validate embedder.model_name against the DB's stored embed_model set.
+     Cosine similarity is only meaningful across vectors from the same model;
+     same dim is necessary but not sufficient (First Principles fact F1).
+  2. embed the question
+  3. Qdrant vector search over top_k*3 candidates (optionally filtered by doc_type)
+  4. BM25Okapi over the candidates' ``title + description`` (char-level tokenize so
      Chinese needs no extra dependency)
-  4. min-max normalize both score sets and fuse with vector_weight / bm25_weight
-  5. (optional) flashrank rerank over the fused top_k
-  6. return top_k docs, each annotated with needs_description (D6 lazy backfill flag)
+  5. min-max normalize both score sets and fuse with vector_weight / bm25_weight
+  6. (optional) flashrank rerank over the fused top_k
+  7. return top_k docs, each annotated with needs_description (D6 lazy backfill flag)
 """
 from __future__ import annotations
 
@@ -31,6 +34,25 @@ def _minmax(values: list[float]) -> list[float]:
     return [(v - lo) / (hi - lo) for v in values]
 
 
+def _check_model_compatibility(indexer: Any, embedder: Any) -> None:
+    """B5: raise ValueError if embedder.model_name differs from the DB's
+    embed_model. Empty embed_model in the DB (legacy) is treated as
+    "unknown" — query proceeds, the migrate-embed-model script will backfill.
+    """
+    cur = embedder.model_name
+    models = indexer.get_embed_models()
+    real = {m for m in models if m}
+    if not real:
+        return  # legacy DB — allow
+    if cur not in real:
+        raise ValueError(
+            f"query: embed_model mismatch — embedder is {cur!r}, DB was built "
+            f"with {real!r}. Cosine similarity across models is meaningless. "
+            f"Either revert config.json to the DB's model, or run "
+            f"`python3 scripts/kb/build_db.py` to rebuild with the new model."
+        )
+
+
 def query(
     question: str,
     indexer: Any,
@@ -41,7 +63,12 @@ def query(
     vector_weight: float = 0.7,
     bm25_weight: float = 0.3,
 ) -> list[dict[str, Any]]:
-    """Hybrid vector+BM25 search. Returns at most `top_k` results."""
+    """Hybrid vector+BM25 search. Returns at most `top_k` results.
+
+    B5: raises ValueError if embedder.model_name doesn't match the DB.
+    """
+    _check_model_compatibility(indexer, embedder)
+
     qvec = embedder.embed(question)
 
     # 1. vector retrieval — over-fetch so BM25/fusion have a candidate pool.
