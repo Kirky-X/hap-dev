@@ -1,0 +1,10 @@
+{
+  "name": "hap-dev",
+  "description": "鸿蒙应用开发技能。5 子命令: create(创建ArkTS工程) / fix(编译+运行时+语法修复) / test(MCP平台检测测试) / kb(Qdrant知识库查询/构建/合并/重索引) / search(双端点在线文档搜索)。覆盖鸿蒙开发全生命周期。",
+  "license": "MIT",
+  "version": "0.1.0",
+  "author": "HAP-DEV Contributors",
+  "repo": "",
+  "homepage": "",
+  "tag": ["harmonyos", "harmony", "arkts", "arkui", "deveco", "qdrant", "knowledge-base", "mcp", "testing"]
+}

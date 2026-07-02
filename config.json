@@ -1,0 +1,30 @@
+{
+  "embed_model": "sentence-transformers/paraphrase-MiniLM-L3-v2",
+  "embed_dim": 384,
+  "embed_source": "modelscope",
+  "embed_base_url": "",
+  "embed_api_key": "",
+  "rerank_model": "flashrank",
+  "rerank_source": "local",
+  "rerank_base_url": "",
+  "rerank_api_key": "",
+  "db_path": "data/harmonyos.qdrant",
+  "collection": "harmonyos_docs",
+  "sidebars_dir": "sidebars",
+  "endpoints": {
+    "developer": {
+      "host": "svc-drcn.developer.huawei.com",
+      "path": "/community/servlet/consumer/partnerCommunityService/developer/search",
+      "catalogs": ["best-practices", "harmonyos-guides", "harmonyos-references"]
+    },
+    "device": {
+      "host": "svc-drcn.harmonyos.com",
+      "path": "/servlet/partnerCommunityService/developer/harmonyNorthSearch"
+    }
+  },
+  "query": {
+    "default_top_k": 5,
+    "bm25_weight": 0.3,
+    "vector_weight": 0.7
+  }
+}

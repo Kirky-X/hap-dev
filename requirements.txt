@@ -1,0 +1,15 @@
+# Python dependencies for hap-dev skill
+# Install: pip install -r requirements.txt
+
+# --- Required (kb + search subcommands) ---
+qdrant-client>=1.9.0
+rank-bm25>=0.2.2
+httpx>=0.27.0
+sentence-transformers>=3.0.0
+modelscope>=1.10.0
+
+# --- Optional: reranker (enable flashrank in config.json) ---
+flashrank>=0.1.2
+
+# --- Optional: cloud embedding models (openai://<model> in config.json) ---
+openai>=1.0.0
