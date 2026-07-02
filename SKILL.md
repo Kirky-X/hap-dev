@@ -18,6 +18,20 @@ license: MIT
 
 > 🔴 **CHECKPOINT**：禁止 agent 直接 WebFetch 访问鸿蒙文档。所有文档正文访问必须经 `search detail` 脚本（需求#12）。
 
+**TL;DR 决策树**(快速路由,完整流程见下表):
+
+```
+用户意图
+├─ "创建/新建工程"           → create  (copy-template.mjs)
+├─ "编译报错/build 失败"     → fix     (error-fixes 轨道)
+├─ "崩溃/白屏/jscrash"       → fix     (runtime-fix 轨道)
+├─ "语法对不对/TS 差异"      → fix     (grammar 轨道)
+├─ "测试/构建/启动模拟器"    → test    (platform.py 检测)
+├─ "查本地知识库/语义检索"   → kb      (query,默认 top-5)
+├─ "在线查文档/API/指南"     → search  (双端点路由)
+└─ "知识库管理/切换模型/合并"→ kb      (build/merge/reindex)
+```
+
 | 用户意图                                    | 子命令   | 完整流程                                                          |
 | ------------------------------------------- | -------- | ----------------------------------------------------------------- |
 | 创建 / 新建 ArkTS 工程（从零/脚手架）       | create   | [`references/commands/create.md`](references/commands/create.md) |
