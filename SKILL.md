@@ -1,6 +1,6 @@
 ---
 name: hap-dev
-description: "鸿蒙应用开发技能。触发:HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/Stage模型/@ohos/UIAbility/NavPathStack/@ComponentV2/创建鸿蒙工程/ArkTS编译错误/ArkTS运行时崩溃/jscrash/HAP构建/鸿蒙文档搜索/鸿蒙知识库。5 子命令: create(创建ArkTS工程) / fix(编译+运行时+语法修复) / test(MCP平台检测测试) / kb(Qdrant知识库) / search(双端点在线文档搜索)。English: HarmonyOS development, ArkTS, ArkUI, DevEco, HAP build, jscrash, knowledge base."
+description: "鸿蒙应用开发技能（5 子命令：create/fix/test/kb/search）。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/Stage 模型/创建鸿蒙工程/ArkTS 编译错误/jscrash/HAP 构建/文档搜索/知识库"
 license: MIT
 ---
 

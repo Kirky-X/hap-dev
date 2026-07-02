@@ -15,12 +15,7 @@
 
 ### 症状歧义处理
 
-按 `error-fixes → runtime-fix → grammar` 顺序尝试：
-
-1. 先看是否有任何编译 / 类型错误信号（含 `error:`、`ArkTS:ERROR`、`type 'X' is not assignable` 等）→ error-fixes 轨道。
-2. 否则看是否有任何运行时崩溃信号（含 `jscrash`、`TypeError`、`faultlog`、白屏、闪退、build 成功后崩溃）→ runtime-fix 轨道。
-3. 否则若是纯语法问题咨询 → grammar 轨道。
-4. 仍不明确 → 经 `AskUserQuestion` 让用户提供更明确症状（崩溃日志 / 编译报错原文 / 语法疑问具体例子），不强行猜测。
+按 `error-fixes → runtime-fix → grammar` 顺序尝试：编译 / 类型错误信号（`error:`、`ArkTS:ERROR`、`type 'X' is not assignable`）→ error-fixes；运行时崩溃信号（`jscrash`、`TypeError`、`faultlog`、白屏、闪退、build 成功后崩溃）→ runtime-fix；纯语法咨询 → grammar；仍不明确 → 经 `AskUserQuestion` 让用户提供更明确症状，不强行猜测。
 
 ---
 
@@ -30,7 +25,7 @@
 
 ### Error Categories 快速参考表
 
-下表迁自 arkts-error-fixes references，列出 21 类常见编译错误及一线修复方向。每类对应 `references/error-fixes/<category>.md` 详细文档与 `references/error-fixes/assets/<Name>.ets` 代码示例。
+下表列出 21 类常见编译错误及一线修复方向，每类对应 `references/error-fixes/<category>.md` 与 `assets/<Name>.ets`。
 
 | 错误类别 | 描述 | 一线修复 |
 | ---- | ---- | ---- |
@@ -204,10 +199,8 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 
 ### 解释规则
 
-- 优先看应用栈帧，过滤框架噪声。
-- 把第一个具体的 `.ets` / `.ts` / `.js` 路径作为起点，**不** 作为最终结论。
-- 用户给了复现步骤 → 信任用户步骤胜于纯栈猜。
-- 栈指向非入口页 → 假定是交互触发的路径，除非证据证明是冷启崩溃。
+- 优先看应用栈帧，过滤框架噪声；第一个具体 `.ets` / `.ts` / `.js` 路径作为起点，**不** 作为最终结论。
+- 用户给了复现步骤 → 信任用户步骤胜于纯栈猜；栈指向非入口页 → 假定交互触发，除非证据证明冷启崩溃。
 - **不** 大范围重构；先修崩溃路径。
 
 ### 约束
@@ -219,8 +212,7 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 
 ### 与其他子命令协同
 
-- 与 `test` 协同：`test` 模拟器验证崩溃 → `test` 的 `get_ui_verification_log` + `save_ui_screenshot` + hilog → 喂给本轨道 Case C 诊断。
-- 与 `search` 协同：遇到陌生 `@ohos.*` API 错误 → 调 `search` 在线查官方文档补充修复依据。
+与 `test`：模拟器验证崩溃的 `get_ui_verification_log` + `save_ui_screenshot` + hilog 喂给本轨道 Case C；与 `search`：陌生 `@ohos.*` API 错误调 `search` 在线查官方文档补充修复依据。
 
 ---
 
@@ -232,15 +224,9 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 
 写 / 改 `.ets` 文件前：
 
-- 把代码当作 ArkTS，**不** 当通用 TypeScript。
-- 不用 `any` / `unknown`（除非用户显式允许）。
-- 不用 `as` 类型断言；用显式类型、构造器或带类型的辅助函数。
-- 不依赖结构化类型；用命名 class / interface / 显式 `implements`。
-- 不把 `obj[key]` 动态属性访问作为常规建模模式；优先用已知名称直接访问。
-- 给对象字面量显式类型上下文（typed 变量 / 参数 / class / interface 构造）。
-- 不用内联对象字面量类型；定义命名 interface / class。
-- 不用模板字面量（`` `${value}` ``）；用字符串拼接 + 显式转换。
-- 不把 namespace 当运行时值；直接 import / 引用所需的具体导出值 / 类型。
+- 把代码当作 ArkTS，**不** 当通用 TypeScript；不用 `any` / `unknown`（除非用户显式允许）、`as` 类型断言、模板字面量、内联对象字面量类型；不把 namespace 当运行时值。
+- 不依赖结构化类型；用命名 class / interface / 显式 `implements`；不把 `obj[key]` 动态属性访问作为常规建模模式，优先用已知名称直接访问。
+- 给对象字面量显式类型上下文（typed 变量 / 参数 / class / interface 构造）；定义命名 interface / class 替代内联类型；用字符串拼接 + 显式转换替代模板字面量。
 - 避免受限 TS 模式：解构声明、解构参数、function 表达式、嵌套局部函数声明、class 表达式、`delete`、`in`、`for...in`、`typeof Foo` 类型查询。
 
 ### Reference 顺序
@@ -254,9 +240,7 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 
 ### Source 归属
 
-- `basic-syntax.md` 与 `ts-diff.md`：guide 导向摘要，基于 ArkTS 语言指南章节。
-- `restrictions.md`：基于 linter 摘要的实现派生指南，**必须** 明确说明这一点。**禁止** 把 linter 派生的限制当作官方规范原文。
-- guide 解释与 linter 限制同时适用 → 两者都提，并用一两句说明关系。
+`basic-syntax.md` 与 `ts-diff.md` 是 guide 导向摘要（基于 ArkTS 语言指南章节）；`restrictions.md` 是基于 linter 摘要的实现派生指南，**必须** 明确说明这一点，**禁止** 当作官方规范原文。guide 解释与 linter 限制同时适用 → 两者都提，用一两句说明关系。
 
 ### 响应格式
 
@@ -274,9 +258,7 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 
 ### 工作规则
 
-- 优先直接语法指引，避免大段语言教程。
-- 优先命名 ArkTS 替代：class、interface、显式字段类型、箭头函数、直接属性访问。
-- 引用短且可追溯。
+- 优先直接语法指引，避免大段语言教程；优先命名 ArkTS 替代（class、interface、显式字段类型、箭头函数、直接属性访问）；引用短且可追溯。
 - **禁止** 扩展到 build / run / debug / 工具工作流，除非用户在语法答案之后显式要求。
 
 ### 边界情形
@@ -301,22 +283,13 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 ## 交付核对清单
 
 ### error-fixes 轨道
-- [ ] 编译错误原文已收集
-- [ ] 错误类别已在 21 类表内定位（或确认表外并调 search）
-- [ ] 读过对应 `references/error-fixes/<category>.md` + `assets/*.ets`
-- [ ] 修改最小化，不重构无关代码
-- [ ] 修改后 `build_project` 通过
+- [ ] 编译错误原文已收集；错误类别已在 21 类表内定位（或确认表外并调 search）
+- [ ] 读过对应 `references/error-fixes/<category>.md` + `assets/*.ets`；修改最小化，不重构无关代码；修改后 `build_project` 通过
 
 ### runtime-fix 轨道
-- [ ] `bundleName` 从 `AppScope/app.json5` 读取，未猜测
-- [ ] 选定 Case A / B / C 并执行对应脚本
-- [ ] 多设备场景下经 `AskUserQuestion` 让用户选 device
-- [ ] 拿到 `status: detected` 锚点后才进入定向代码读取
-- [ ] `status: no_crash_signature` 时不大规模读代码，请用户提供更好证据
-- [ ] 修复后跑 `test` 子命令的模拟器验证或用户手动复现验证
+- [ ] `bundleName` 从 `AppScope/app.json5` 读取；选定 Case A / B / C 并执行对应脚本；多设备场景下经 `AskUserQuestion` 让用户选 device
+- [ ] 拿到 `status: detected` 锚点后才进入定向代码读取；`no_crash_signature` 时不大规模读代码；修复后跑 `test` 模拟器验证或用户手动复现
 
 ### grammar 轨道
-- [ ] 按 reference 顺序读对应文件
-- [ ] 响应格式符合规范（Topic / Source / Reference / Why / Guidance）
-- [ ] 区分 guide-summary 与 linter-summary 归属
-- [ ] 不扩展到 build / run / debug 流程
+- [ ] 按 reference 顺序读对应文件；响应格式符合规范（Topic / Source / Reference / Why / Guidance）
+- [ ] 区分 guide-summary 与 linter-summary 归属；不扩展到 build / run / debug 流程
