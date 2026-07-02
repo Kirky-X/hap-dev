@@ -127,9 +127,7 @@ flowchart LR
     search -.->|支撑全程| test
 ```
 
-- **kb 与 search 协同**：kb query 命中无 description 文档 → search detail 取正文 → 回填 description + 提取相关推荐双向链接 → 后续 kb query 基于更丰富向量返回更准结果。
-- **fix 与 search 协同**：fix 轨道遇到未知 API/错误 → search 在线查官方文档 → 补充修复依据。
-- **test 与 fix 协同**：test 模拟器测试崩溃 → hilog/faultlog → 喂给 fix runtime-fix 轨道诊断。
+**协同要点**：kb query 命中无 description → search detail 取正文 → 回填 description + 双向链接；fix 遇未知 API → search 查官方文档；test 模拟器崩溃 → hilog → fix runtime-fix 诊断。
 
 ## 失败模式与 fallback
 
@@ -138,10 +136,13 @@ flowchart LR
 | config.json 缺失 | agent 经 AskUserQuestion 询问，选默认则生成默认配置 | 用户拒绝配置则停止，提示手动编辑 config.json |
 | 预构建库不存在 | 调 `kb build` 从 sidebars/ 重建 | sidebars/ 缺失则提示用户从 temp/ 复制 |
 | kb query 无结果 | 换关键词或调 `search` 在线搜索 | search 也无结果则建议直访 developer.huawei.com |
-| search 端点失效 | 显式报错（不静默），建议检查网络 | 切换另一端点重试 |
-| ModelScope 模型下载失败 | 重试 + 镜像源配置 | 提示用户手动下载或切换 openai:// 云端模型 |
-| MCP 未安装（test） | 提示用户手动 `npm i -g @deveco-codegenie/mcp` | Linux 无需 MCP，仅静态检查可用 |
-| fix 症状歧义 | 按 error-fixes → runtime-fix → grammar 顺序 fallback | 询问用户提供更明确症状 |
+| kb query 报维度不匹配 | embed_dim 改了未 rebuild → 跑 `python3 scripts/kb/build_db.py` | 仍报错则检查 config.json 的 embed_dim 与模型实际维度 |
+| search 端点失效（HTTP 5xx/超时） | 显式报错（非零退出码 + errors 字段），不静默 | 切换另一端点重试；两端口都失败则建议直访官网 |
+| search detail content 为空 | 检查 object_id/catalog 是否匹配；URL 是否过期 | 告知用户并提供原始 url 供手动访问 |
+| ModelScope 模型下载失败（404/超时） | 重试 + 检查模型名拼写（如 `+` 后缀非法） | 提示手动下载或切换 `openai://` 云端模型 |
+| MCP 未安装（test check 报 `MCP 安装: 否`） | 提示 `npm i -g @deveco-codegenie/mcp` + 配置文件注册 | Linux 无需 MCP，仅静态检查可用 |
+| fix 症状歧义 | 按 error-fixes → runtime-fix → grammar 顺序 fallback | 询问用户提供更明确症状（错误码/堆栈/截图） |
+| sidebars/ 解析出 0 条文档 | 检查 sidebars/ 目录是否非空 + JSON 格式是否合法 | 提示用户从 temp/harmonyos-*.md 重新生成 |
 
 > 🔴 **CHECKPOINT**：fix 子命令的 runtime-fix 轨道执行 `hdc` 命令(faultlog/hilog 采集)前 MUST 确认目标设备序列号正确。`hdc -t <serial> shell ...` 误操作可能影响生产设备。Linux 平台 hdc 工具不可用,自动降级为日志文件解析模式。
 
