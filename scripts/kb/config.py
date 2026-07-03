@@ -31,6 +31,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "bm25_weight": 0.3,
         "vector_weight": 0.7,
     },
+    # B14/T026: 网页内容过期天数。30 天内重复访问同一 url 用缓存，不重新抓取。
+    "content_expire_days": 30,
 }
 
 

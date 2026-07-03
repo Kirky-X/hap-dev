@@ -27,18 +27,25 @@ import sys
 from typing import Any, Optional
 
 from .config import DEFAULT_CONFIG, ensure_config, load_config
+from .content_fetcher import (
+    DEFAULT_EXPIRE_DAYS,
+    fetch_content,
+    is_content_expired,
+)
 from .embed import Embedder
-from .indexer import QdrantIndexer
+from .indexer import ID_FIELD, QdrantIndexer
 from .links import update_links
 from .links_auto import auto_link
 from .merge import merge as do_merge
 from .query import query as do_query
 from .reindex import reindex as do_reindex
 from .sidebar_parser import parse_all_sidebars
+from .update_content import update_content
 from .update_description import update_description
 
 ACTIONS = ("query", "build", "merge", "reindex", "update-description",
-           "recommend-api", "link-auto", "migrate-embed-model", "config")
+           "recommend-api", "link-auto", "migrate-embed-model", "config",
+           "fetch-content", "update-content", "migrate-context", "refresh-expired")
 
 
 # ---- factories (kept module-level so tests can monkeypatch them) -----------
@@ -61,15 +68,23 @@ def make_indexer(cfg: dict[str, Any]) -> QdrantIndexer:
 
 
 def _load_cfg(config_arg: Optional[str]) -> dict[str, Any]:
+    """Load config and merge with DEFAULT_CONFIG (B14/T026).
+
+    旧 config.json 可能缺新字段（如 content_expire_days）——合并确保
+    新字段在旧 config 上也有默认值，避免 KeyError。
+    """
     if config_arg:
         cfg = load_config(config_arg)
         if cfg is None:
             raise FileNotFoundError(f"config file not found: {config_arg}")
-        return cfg
-    cfg = ensure_config()
-    if cfg is None:
-        return dict(DEFAULT_CONFIG)
-    return cfg
+    else:
+        cfg = ensure_config()
+        if cfg is None:
+            return dict(DEFAULT_CONFIG)
+    # 浅合并：DEFAULT_CONFIG 提供默认值，cfg 覆盖（cfg 的值优先）
+    merged = dict(DEFAULT_CONFIG)
+    merged.update(cfg)
+    return merged
 
 
 # ---- argument parser -------------------------------------------------------
@@ -131,6 +146,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = sub.add_parser("config", help="print the effective config")
     c.add_argument("--config", default=None)
+
+    # B14/T028: 4 个新子命令（recommend-api 已在 T022 实现）
+    fc = sub.add_parser("fetch-content",
+                        help="fetch a single url's markdown content (B16)")
+    fc.add_argument("--url", required=True,
+                    help="HarmonyOS doc url to fetch")
+    fc.add_argument("--config", default=None)
+
+    uc = sub.add_parser("update-content",
+                        help="update doc context + description + vector + hash (B17)")
+    uc.add_argument("--doc-id", required=True)
+    uc.add_argument("--description", required=True,
+                    help="new description (agent-generated summary)")
+    uc.add_argument("--context-file", default=None,
+                    help="path to a file containing the fetched markdown content; "
+                         "if absent, reads from stdin")
+    uc.add_argument("--config", default=None)
+
+    mc = sub.add_parser("migrate-context",
+                        help="backfill context field on legacy docs (B14 migration)")
+    mc.add_argument("--config", default=None)
+
+    re = sub.add_parser("refresh-expired",
+                        help="list docs whose content has expired (B18, does NOT refresh)")
+    re.add_argument("--expire-days", type=int, default=None,
+                    help="override content_expire_days from config")
+    re.add_argument("--config", default=None)
+
     return p
 
 
@@ -219,7 +262,103 @@ def _run_recommend_api(args: argparse.Namespace) -> Any:
         idx.close()
     out = {"linked": linked}
     print(json.dumps(out, ensure_ascii=False, indent=2))
-    return linked
+    return out
+
+
+def _run_fetch_content(args: argparse.Namespace) -> Any:
+    """B16: 抓取单个 url 的 markdown 内容并输出。"""
+    cfg = _load_cfg(args.config)
+    # fetch_content 不需要 indexer/embedder，只调用 detail API
+    content = fetch_content(args.url)
+    out = {"content": content}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
+
+
+def _run_update_content(args: argparse.Namespace) -> Any:
+    """B17: 更新 doc 的 context + description + 向量 + hash。
+
+    context 读取顺序：--context-file > stdin，两者都无时 raise ValueError。
+    """
+    cfg = _load_cfg(args.config)
+    emb = make_embedder(cfg)
+    idx = make_indexer(cfg)
+
+    # context 优先级：--context-file > stdin
+    if args.context_file:
+        from pathlib import Path
+        ctx_path = Path(args.context_file)
+        if not ctx_path.exists():
+            raise FileNotFoundError(f"context file not found: {args.context_file}")
+        context = ctx_path.read_text(encoding="utf-8")
+    else:
+        # 回退 stdin
+        context = sys.stdin.read()
+    context = context.strip()
+    if not context:
+        raise ValueError(
+            "update-content: context 不能为空——提供 --context-file 或通过 stdin 输入"
+        )
+
+    try:
+        update_content(args.doc_id, context, args.description, idx, emb)
+    finally:
+        idx.close()
+    out = {"updated": args.doc_id}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
+
+
+def _run_migrate_context(args: argparse.Namespace) -> Any:
+    """B14 迁移：给缺 context 字段的 doc 写 ""。
+
+    Idempotent：已有 context 字段（无论是否为空）的 doc 跳过。用 iter_raw_payloads
+    检查原始 payload 字段是否存在——_payload_from 会把缺失的 context 默认成 ""，
+    无法区分"字段缺失"和"字段为空"。
+    """
+    cfg = _load_cfg(args.config)
+    idx = make_indexer(cfg)
+    try:
+        raw_payloads = idx.iter_raw_payloads()
+        migrated = 0
+        skipped = 0
+        for raw in raw_payloads:
+            if "context" in raw:
+                skipped += 1
+                continue
+            # context 字段缺失 → 写 ""（确保字段存在）
+            doc_id = raw[ID_FIELD]
+            idx.set_payload(doc_id, {"context": ""})
+            migrated += 1
+    finally:
+        idx.close()
+    out = {"migrated": migrated, "skipped": skipped}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
+
+
+def _run_refresh_expired(args: argparse.Namespace) -> Any:
+    """B18: 扫描过期 doc 仅输出 doc_id 列表（不执行刷新）。
+
+    刷新由 agent 据此手动执行：fetch_content → should_refresh_content →
+    touch_updated_at 或 update_content + update_links。
+    """
+    cfg = _load_cfg(args.config)
+    expire_days = args.expire_days if args.expire_days is not None else cfg.get(
+        "content_expire_days", DEFAULT_EXPIRE_DAYS,
+    )
+    idx = make_indexer(cfg)
+    try:
+        docs = idx.list_all()
+        expired_ids = [
+            doc["id"] for doc in docs
+            if is_content_expired(doc, expire_days=expire_days)
+        ]
+    finally:
+        idx.close()
+    out = {"expired_doc_ids": expired_ids, "expire_days": expire_days}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
 
 
 def _run_config(args: argparse.Namespace) -> Any:
@@ -319,6 +458,11 @@ _DISPATCH = {
     "link-auto": _run_link_auto,
     "migrate-embed-model": _run_migrate_embed_model,
     "config": _run_config,
+    # B14/T028: 4 个新子命令
+    "fetch-content": _run_fetch_content,
+    "update-content": _run_update_content,
+    "migrate-context": _run_migrate_context,
+    "refresh-expired": _run_refresh_expired,
 }
 
 

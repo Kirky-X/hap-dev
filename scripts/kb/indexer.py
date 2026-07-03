@@ -339,6 +339,31 @@ class QdrantIndexer:
             models.add(d.get("embed_model", ""))
         return models
 
+    def iter_raw_payloads(self) -> list[dict[str, Any]]:
+        """B14: return raw Qdrant payloads without ``_payload_from`` normalization.
+
+        Used by migrate-context to detect legacy docs missing the ``context``
+        field that ``_payload_from`` would default to ``""``. Each dict contains
+        only the fields actually present in storage — missing keys mean the
+        field was never written (pre-B14 legacy doc).
+        """
+        self._ensure_collection(recreate=False)
+        out: list[dict[str, Any]] = []
+        offset = None
+        while True:
+            res, offset = self.client.scroll(
+                collection_name=self.collection,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for p in res:
+                out.append(dict(p.payload or {}))
+            if offset is None:
+                break
+        return out
+
     def _read_point_by_pid(self, pid: int,
                             with_payload: bool = True,
                             with_vectors: bool = False) -> Any:

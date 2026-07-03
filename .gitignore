@@ -57,3 +57,5 @@ scripts/**/tests/
 results.tsv
 test-prompts.json
 darwin-result-card.png
+
+specmark/
