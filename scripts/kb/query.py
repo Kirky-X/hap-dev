@@ -136,6 +136,11 @@ def _check_model_compatibility(indexer: Any, embedder: Any) -> None:
     real = {m for m in models if m}
     if not real:
         return  # legacy DB — allow
+    if len(real) > 1:
+        raise ValueError(
+            f"query: DB contains mixed embed_models {real!r} — already "
+            f"contaminated, refusing to query. Rebuild from sidebars."
+        )
     if cur not in real:
         raise ValueError(
             f"query: embed_model mismatch — embedder is {cur!r}, DB was built "
