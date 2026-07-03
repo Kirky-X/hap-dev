@@ -73,7 +73,8 @@ def _tokenize(text: str) -> list[str]:
         for ch in text[pos:m.start()]:
             if _is_cjk(ch):
                 tokens.append(ch)
-        tokens.append(m.group())
+        # B26: ASCII word 归一化为小写，避免 "HarmonyOS" 与 "harmonyos" 成为不同 token
+        tokens.append(m.group().lower())
         pos = m.end()
     # tail after last ASCII word — scan for CJK
     for ch in text[pos:]:
