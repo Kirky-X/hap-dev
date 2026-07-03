@@ -161,17 +161,33 @@ def update_links(
         if _add_bidirectional_link(source, target):
             source_dirty = True
             # target 的 links 已变化 → 持久化
+            # B23: content_hash 必须与 links 同步刷新，否则 reindex(force=False)
+            # 误判 doc 未变化而跳过重嵌入（即使向量已 stale）
+            target_hash = _make_content_hash(
+                target["title"], target["url"], target["doc_type"],
+                target.get("description", NO_DESCRIPTION),
+                target["links"],
+                context=target.get("context", ""),
+            )
             indexer.set_payload(target["id"], {
                 "links": target["links"],
                 "updated_at": now,
+                "content_hash": target_hash,
             })
         linked.append(target["id"])
 
     # 持久化 source 的 links（如果变化）
     if source_dirty:
+        source_hash = _make_content_hash(
+            source["title"], source["url"], source["doc_type"],
+            source.get("description", NO_DESCRIPTION),
+            source["links"],
+            context=source.get("context", ""),
+        )
         indexer.set_payload(doc_id, {
             "links": source["links"],
             "updated_at": now,
+            "content_hash": source_hash,
         })
 
     return linked
