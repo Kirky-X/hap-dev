@@ -190,16 +190,23 @@ def merge(
     # Read both source DBs (with vectors so we can copy them).
     idx_a = QdrantIndexer(db_path=db_a_path, collection=collection, dim=dim)
     idx_b = QdrantIndexer(db_path=db_b_path, collection=collection, dim=dim)
-    docs_a = {d["id"]: d for d in idx_a.list_all(with_vectors=True)}
-    docs_b = {d["id"]: d for d in idx_b.list_all(with_vectors=True)}
+    # B27: try/finally 确保 list_all/validate 异常时 idx_a/idx_b 被关闭
+    # （Qdrant 本地模式持有文件锁，不关闭会阻塞后续操作）
+    try:
+        docs_a = {d["id"]: d for d in idx_a.list_all(with_vectors=True)}
+        docs_b = {d["id"]: d for d in idx_b.list_all(with_vectors=True)}
 
-    # B3: validate embed_model compatibility BEFORE writing any merged output.
-    models_a = {d.get("embed_model", "") for d in docs_a.values()}
-    models_b = {d.get("embed_model", "") for d in docs_b.values()}
-    _validate_model_compatibility(models_a, models_b, db_a_path, db_b_path)
+        # B3: validate embed_model compatibility BEFORE writing any merged output.
+        models_a = {d.get("embed_model", "") for d in docs_a.values()}
+        models_b = {d.get("embed_model", "") for d in docs_b.values()}
+        _validate_model_compatibility(models_a, models_b, db_a_path, db_b_path)
 
-    idx_a.close()
-    idx_b.close()
+        idx_a.close()
+        idx_b.close()
+    finally:
+        # 正常路径已 close，异常路径未 close → finally 确保 close（close 已吞异常）
+        idx_a.close()
+        idx_b.close()
 
     all_ids = set(docs_a) | set(docs_b)
     merged_docs: list[dict[str, Any]] = []
@@ -220,15 +227,19 @@ def merge(
 
     # Write the merged DB, preserving source vectors (no embedder).
     idx_out = QdrantIndexer(db_path=out_path, collection=collection, dim=dim)
-    idx_out._ensure_collection(recreate=True)
-    for m in merged_docs:
-        vec = m.get("embedding")
-        if vec is None:
-            raise RuntimeError(
-                f"merge: doc {m['id']} has no source vector to preserve"
-            )
-        idx_out.put(m, vec)
-    idx_out.close()
+    # B27: try/finally 确保 put 异常时 idx_out 被关闭
+    try:
+        idx_out._ensure_collection(recreate=True)
+        for m in merged_docs:
+            vec = m.get("embedding")
+            if vec is None:
+                raise RuntimeError(
+                    f"merge: doc {m['id']} has no source vector to preserve"
+                )
+            idx_out.put(m, vec)
+        idx_out.close()
+    finally:
+        idx_out.close()
 
     # Back up the two source DBs by renaming.
     backups = backup([db_a_path, db_b_path])
