@@ -62,14 +62,24 @@ class Embedder:
     # ---- backends ---------------------------------------------------------
 
     def _load_local(self) -> Any:
-        """Load the sentence-transformers backend, optionally via modelscope."""
+        """Load the sentence-transformers backend, optionally via modelscope.
+
+        B14 修复：modelscope.snapshot_download 默认会联网验证模型版本，即使模型
+        已缓存也会 hang。改为先尝试 local_files_only=True（纯本地），失败再走
+        完整下载。这样已缓存的模型秒加载，未缓存的才联网。
+        """
         from sentence_transformers import SentenceTransformer  # lazy import
 
         name: Any = self.model_name
         if self.source == "modelscope":
             try:
                 from modelscope import snapshot_download
-                name = snapshot_download(self.model_name)
+                # 先尝试纯本地加载（模型已缓存时秒返回，不联网）
+                try:
+                    name = snapshot_download(self.model_name, local_files_only=True)
+                except Exception:
+                    # 本地无缓存 → 完整下载（联网）
+                    name = snapshot_download(self.model_name)
             except ImportError:
                 # modelscope not installed — fall back to the raw name; ST will
                 # pull from HuggingFace if reachable. Not silently swallowing: the

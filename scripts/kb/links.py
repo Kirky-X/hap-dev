@@ -137,8 +137,16 @@ def update_links(
         target = indexer.get(target_id)
         if target is None:
             # target 不在 DB → 抓取 + upsert 新 doc
-            # fetch_content 失败时 raise ValueError（fail-loud，不跳过）
-            context = fetch_content(target_url)
+            # fetch_content 对不支持的 catalog 路径（如 games-guides）raise
+            # ValueError——recommend API 会返回非 HarmonyOS 文档，跳过这些推荐
+            # 而非让整个操作失败（Rule 12：跳过原因在 stderr 输出，不静默吞掉）
+            try:
+                context = fetch_content(target_url)
+            except ValueError as e:
+                import sys
+                print(f"update_links: skip {target_url} — {e}",
+                      file=sys.stderr)
+                continue
             target = _build_new_target_doc(
                 url=target_url,
                 name=rec.get("name") or target_url,
