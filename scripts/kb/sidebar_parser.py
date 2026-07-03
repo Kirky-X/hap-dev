@@ -55,6 +55,7 @@ def _make_content_hash(
     doc_type: str,
     description: str = NO_DESCRIPTION,
     links: list[str] | None = None,
+    context: str = "",
 ) -> str:
     """Content fingerprint = sha1 over the doc's *content-bearing* fields.
 
@@ -64,10 +65,15 @@ def _make_content_hash(
     change MUST change the hash. links are included because they affect
     payload consistency (merge inspects them). Order-invariant on links
     (sorted) — membership is what counts, not insertion order.
+
+    B14: context (url 的原始 markdown 内容) 加入 hash 公式。context 是网页原始
+    内容，hash 用于检测"网页是否变化"——如果 context 不在 hash 里，网页变化但
+    description 没变时 hash 不变，无法触发 reindex。向后兼容：context 默认 ""，
+    对旧 docs（无 context）重算 hash 结果不变（空字符串拼接无影响）。
     """
     sorted_links = sorted(links) if links else []
     raw = (
-        title + url + doc_type + description
+        title + url + doc_type + description + context
         + "|links:" + ",".join(sorted_links)
     ).encode("utf-8")
     return hashlib.sha1(raw).hexdigest()
@@ -76,13 +82,14 @@ def _make_content_hash(
 def parse_sidebar(path: str, doc_type: str) -> list[dict[str, Any]]:
     """Parse a sidebar markdown file into a list of doc records.
 
-    Each record has the 10-field schema (after B1+B4 upgrade):
+    Each record has the 11-field schema (after B1+B4+B14 upgrade):
       id, title, doc_type, url, description, links,
-      created_at, updated_at, content_hash, embed_model.
+      created_at, updated_at, content_hash, embed_model, context.
     `embed_model` is initially "" — the indexer stamps it with the embedder's
-    model_name on build/upsert. `embedding` (the vector) is intentionally NOT
-    set here — the indexer computes it from `title` (or `description` after
-    backfill).
+    model_name on build/upsert. `context` is initially "" — the agent fills it
+    with the url's raw markdown content after fetching (B14). `embedding`
+    (the vector) is intentionally NOT set here — the indexer computes it from
+    `title` (or `description` after backfill).
 
     Raises FileNotFoundError if `path` does not exist (Rule 12: fail loud).
     """
@@ -118,6 +125,8 @@ def parse_sidebar(path: str, doc_type: str) -> list[dict[str, Any]]:
                 ),
                 # embed_model is "" until the indexer stamps it on build/upsert
                 "embed_model": "",
+                # B14: context is "" until the agent fetches the url content.
+                "context": "",
             })
     return docs
 

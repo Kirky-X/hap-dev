@@ -93,6 +93,7 @@ def _persist_links(indexer: Any, doc_id: str, doc: dict[str, Any], now: str) -> 
         doc["title"], doc["url"], doc["doc_type"],
         doc.get("description", NO_DESCRIPTION),
         doc["links"],
+        context=doc.get("context", ""),
     )
     indexer.set_payload(doc_id, {
         "links": doc["links"],

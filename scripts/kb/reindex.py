@@ -30,14 +30,18 @@ def _content_hash(
     doc_type: str,
     description: str = NO_DESCRIPTION,
     links: list[str] | None = None,
+    context: str = "",
 ) -> str:
     """B4: delegated to sidebar_parser._make_content_hash (single source of truth).
 
     Two call sites previously computed content_hash independently — that drift
     was itself a bug (reindex would always detect a "change" because its hash
     algorithm differed from the one used at build time).
+
+    B14: context 参数转发给 _make_content_hash，让 reindex 能检测 context
+    （网页原始内容）的变化——这是 B14 的核心目的之一。
     """
-    return _make_content_hash(title, url, doc_type, description, links)
+    return _make_content_hash(title, url, doc_type, description, links, context)
 
 
 def _embed_text(doc: dict[str, Any]) -> str:
@@ -83,6 +87,7 @@ def reindex(indexer: Any, embedder: Any, force: bool = False) -> int:
                 doc["title"], doc["url"], doc["doc_type"],
                 doc.get("description", NO_DESCRIPTION),
                 doc.get("links", []),
+                context=doc.get("context", ""),
             )
             if doc["content_hash"] != recomputed:
                 # fix the stored content_hash before re-embedding

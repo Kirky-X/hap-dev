@@ -31,6 +31,7 @@ ID_FIELD = "id"
 PAYLOAD_FIELDS = frozenset({
     "id", "title", "doc_type", "url", "description",
     "links", "created_at", "updated_at", "content_hash", "embed_model",
+    "context",
 })
 
 
@@ -167,6 +168,9 @@ class QdrantIndexer:
 
         B1: includes `embed_model` as the 10th field. Old docs without it
         read back as "" via `_payload_from` (legacy tolerance).
+
+        B14: includes `context` as the 11th field (url 抓取的原始 markdown
+        内容，初始 "")。Old docs without it read back as "" via `_payload_from`.
         """
         return {
             ID_FIELD: doc["id"],
@@ -179,6 +183,7 @@ class QdrantIndexer:
             "updated_at": doc["updated_at"],
             "content_hash": doc["content_hash"],
             "embed_model": doc.get("embed_model", ""),
+            "context": doc.get("context", ""),
         }
 
     # ---- read -------------------------------------------------------------
@@ -316,6 +321,9 @@ class QdrantIndexer:
             # B1: legacy tolerance — pre-B1 docs lack this field; treat as "".
             # Use `or ""` to also coerce None (left over by some Qdrant ops).
             "embed_model": payload.get("embed_model") or "",
+            # B14: legacy tolerance — pre-B14 docs lack context; treat as "".
+            # Use `or ""` to coerce None (consistent with embed_model handling).
+            "context": payload.get("context") or "",
         }
 
     def get_embed_models(self) -> set[str]:
