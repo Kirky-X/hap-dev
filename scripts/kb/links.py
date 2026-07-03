@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .content_fetcher import fetch_content
+from .query import _check_model_compatibility
 from .recommend import get_recommendations
 from .sidebar_parser import NO_DESCRIPTION, _make_content_hash
 
@@ -114,6 +115,7 @@ def update_links(
             "update_links: embedder 不能为 None——新 doc 入库需立即嵌入并盖章 "
             "embed_model，零向量会污染 links_auto 余弦计算（分母为零）"
         )
+    _check_model_compatibility(indexer, embedder)
 
     source = indexer.get(doc_id)
     if source is None:

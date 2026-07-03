@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from .query import _check_model_compatibility
 from .sidebar_parser import NO_DESCRIPTION, _make_content_hash
 
 
@@ -41,6 +42,7 @@ def update_description(
     doc = indexer.get(doc_id)
     if doc is None:
         raise KeyError(f"update_description: doc_id not in index: {doc_id}")
+    _check_model_compatibility(indexer, embedder)
     if not description or description == NO_DESCRIPTION:
         raise ValueError("update_description: description must be a real, non-empty string")
 
