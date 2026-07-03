@@ -1,28 +1,30 @@
-"""Bidirectional link extraction from doc content (tasks 4.10-4.11).
+"""Bidirectional link extraction via getRecommendInfo API (B19 重写).
 
-Parses a "相关推荐" / "相关文档" / "Related" section from a markdown body,
-extracts referenced URLs (markdown links, <a href>, bare URLs), maps each URL to
-its sha1 doc id, and writes the link bidirectionally:
+update_links(doc_id, indexer, embedder) 三参（embedder 必传）：
+1. 读 source doc，调用 recommend.get_recommendations(source.url) 获取推荐列表
+2. 对每个推荐 url：
+   a. 计算 target_id = sha1(url)
+   b. 自链接跳过
+   c. target 已在 DB → 加双向 link（不重算向量）
+   d. target 不在 DB → fetch_content(url) 抓取 → 构造新 doc → indexer.upsert
+      嵌入并盖章 embed_model → 加双向 link
+3. 写入双向 link + 更新 updated_at
 
-    A.links += B.id   AND   B.links += A.id
+embedder=None raise ValueError（fail-loud，禁止零向量污染向量空间）。
+API 失败 raise ValueError（fail-loud，不静默返回空列表）。
 
-Both docs' updated_at are refreshed. Payloads are updated in place via
-`indexer.set_payload`, which does NOT re-embed (the spec's `update_links`
-signature takes no embedder). Targets not present in the index are skipped (a
-bidirectional link requires both endpoints to exist). Self-links are skipped.
+B19 破坏性变更：删除所有 markdown 解析正则（RELATED_HEADING_RE 等）和
+_extract_related_block/_extract_urls——华为官方推荐 API 替代网页抓取。
 """
 from __future__ import annotations
 
 import hashlib
-import re
 from datetime import datetime, timezone
 from typing import Any
 
-RELATED_HEADING_RE = re.compile(r"^#{1,6}\s+.*(相关推荐|相关文档|Related)", re.IGNORECASE)
-HEADING_RE = re.compile(r"^#{1,6}\s")
-MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
-HTML_A_RE = re.compile(r"""<a\s+[^>]*?href=["']([^"']+)["']""", re.IGNORECASE)
-BARE_URL_RE = re.compile(r"""https?://[^\s<>"')\]]+""")
+from .content_fetcher import fetch_content
+from .recommend import get_recommendations
+from .sidebar_parser import NO_DESCRIPTION, _make_content_hash
 
 
 def _now_iso() -> str:
@@ -30,97 +32,138 @@ def _now_iso() -> str:
 
 
 def _url_to_id(url: str) -> str:
+    """url → doc_id（与 sidebar_parser._make_id 一致：sha1(url)）。"""
     return hashlib.sha1(url.encode("utf-8")).hexdigest()
 
 
-def _extract_related_block(content: str) -> str | None:
-    """Return the text of the 相关推荐 block, or None if no such heading.
+def _build_new_target_doc(
+    url: str,
+    name: str,
+    context: str,
+    now: str,
+) -> dict[str, Any]:
+    """构造一个新 doc dict（用于 API 推荐但 DB 中不存在的 target）。
 
-    The block starts at the matching heading and ends at the next heading of any
-    level or at EOF.
+    字段填充策略（design D7）：
+      - id: sha1(url)（与 sidebar_parser 一致，保证幂等）
+      - title: API 返回的 name
+      - doc_type: "api-recommend"（区分来源）
+      - description: NO_DESCRIPTION（agent 后续 update_content 填充）
+      - context: fetch_content 抓取的网页原始内容
+      - embed_model: ""（indexer.upsert 会盖章为 embedder.model_name）
     """
-    lines = content.splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if RELATED_HEADING_RE.match(line):
-            start = i + 1
-            break
-    if start is None:
-        return None
-    block_lines = []
-    for line in lines[start:]:
-        if HEADING_RE.match(line):
-            break
-        block_lines.append(line)
-    return "\n".join(block_lines)
+    doc_id = _url_to_id(url)
+    return {
+        "id": doc_id,
+        "title": name,
+        "doc_type": "api-recommend",
+        "url": url,
+        "description": NO_DESCRIPTION,
+        "links": [],
+        "created_at": now,
+        "updated_at": now,
+        "content_hash": _make_content_hash(
+            name, url, "api-recommend", NO_DESCRIPTION, [], context=context,
+        ),
+        "embed_model": "",
+        "context": context,
+    }
 
 
-def _extract_urls(block: str) -> list[str]:
-    """Extract URLs from markdown links, <a href>, and bare URLs. Dedupe in order."""
-    seen: set[str] = set()
-    urls: list[str] = []
-    # markdown links first (so [text](url) isn't double-counted as bare url)
-    for _, url in MD_LINK_RE.findall(block):
-        if url not in seen:
-            seen.add(url)
-            urls.append(url)
-    for url in HTML_A_RE.findall(block):
-        if url not in seen:
-            seen.add(url)
-            urls.append(url)
-    # remove markdown-link spans before bare-url scan to avoid dupes
-    stripped = MD_LINK_RE.sub(" ", block)
-    stripped = HTML_A_RE.sub(" ", stripped)
-    for url in BARE_URL_RE.findall(stripped):
-        if url not in seen:
-            seen.add(url)
-            urls.append(url)
-    return urls
+def _add_bidirectional_link(
+    source_doc: dict[str, Any],
+    target_doc: dict[str, Any],
+) -> bool:
+    """在 source_doc 和 target_doc 之间加双向 link（如果不存在）。
 
-
-def update_links(doc_id: str, content_markdown: str, indexer: Any) -> list[str]:
-    """Extract related-doc URLs from `content_markdown` and write bidirectional
-    links between `doc_id` and each referenced doc that exists in the index.
-
-    Returns the list of target doc ids that were (bidirectionally) linked.
-    Raises KeyError if `doc_id` itself is not in the index (Rule 12).
+    返回 True 若任一方向新增了 link；False 若两个方向都已存在（幂等）。
     """
+    added = False
+    if target_doc["id"] not in source_doc["links"]:
+        source_doc["links"].append(target_doc["id"])
+        added = True
+    if source_doc["id"] not in target_doc["links"]:
+        target_doc["links"].append(source_doc["id"])
+        added = True
+    return added
+
+
+def update_links(
+    doc_id: str,
+    indexer: Any,
+    embedder: Any,
+) -> list[str]:
+    """通过 API 获取推荐并建立双向 link。
+
+    Args:
+        doc_id: source doc id。
+        indexer: QdrantIndexer（或兼容）实例。
+        embedder: 嵌入器（必传）。新 doc 入库时立即用 embedder 嵌入并盖章
+            embed_model；embedder 为 None 时 raise ValueError（fail-loud，
+            禁止零向量污染向量空间——会导致 links_auto 余弦计算分母为零）。
+
+    Returns:
+        linked doc_ids 列表（已建立双向 link 的 target ids）。
+
+    Raises:
+        KeyError: source doc_id 不存在于索引（fail-loud）。
+        ValueError: embedder 为 None；API 调用失败；fetch_content 失败。
+    """
+    if embedder is None:
+        raise ValueError(
+            "update_links: embedder 不能为 None——新 doc 入库需立即嵌入并盖章 "
+            "embed_model，零向量会污染 links_auto 余弦计算（分母为零）"
+        )
+
     source = indexer.get(doc_id)
     if source is None:
         raise KeyError(f"update_links: source doc_id not in index: {doc_id}")
 
-    block = _extract_related_block(content_markdown)
-    if block is None:
-        return []
+    # 调用 API 获取推荐列表（失败时 get_recommendations 自身 raise ValueError）
+    recommendations = get_recommendations(source["url"])
 
-    urls = _extract_urls(block)
     now = _now_iso()
     linked: list[str] = []
-    source_links: list[str] = list(source["links"])
     source_dirty = False
 
-    for url in urls:
-        target_id = _url_to_id(url)
+    for rec in recommendations:
+        target_url = rec["url"]
+        target_id = _url_to_id(target_url)
+
+        # 自链接跳过
         if target_id == doc_id:
-            continue  # no self-link
+            continue
+
         target = indexer.get(target_id)
         if target is None:
-            continue  # target not indexed — cannot establish bidirectional link
-        # forward: A.links += B.id
-        if target_id not in source_links:
-            source_links.append(target_id)
-            source_dirty = True
-        # backward: B.links += A.id
-        target_links: list[str] = list(target["links"])
-        target_dirty = False
-        if doc_id not in target_links:
-            target_links.append(doc_id)
-            target_dirty = True
-        if target_dirty:
-            indexer.set_payload(target_id, {"links": target_links, "updated_at": now})
-        linked.append(target_id)
+            # target 不在 DB → 抓取 + upsert 新 doc
+            # fetch_content 失败时 raise ValueError（fail-loud，不跳过）
+            context = fetch_content(target_url)
+            target = _build_new_target_doc(
+                url=target_url,
+                name=rec.get("name") or target_url,
+                context=context,
+                now=now,
+            )
+            # upsert 重算向量（从 title，因 description == NO_DESCRIPTION）并盖章
+            # embed_model；payload（含 context）也一并写入
+            indexer.upsert(target, embedder)
 
+        # 加双向 link（幂等）
+        if _add_bidirectional_link(source, target):
+            source_dirty = True
+            # target 的 links 已变化 → 持久化
+            indexer.set_payload(target["id"], {
+                "links": target["links"],
+                "updated_at": now,
+            })
+        linked.append(target["id"])
+
+    # 持久化 source 的 links（如果变化）
     if source_dirty:
-        indexer.set_payload(doc_id, {"links": source_links, "updated_at": now})
+        indexer.set_payload(doc_id, {
+            "links": source["links"],
+            "updated_at": now,
+        })
 
     return linked

@@ -9,7 +9,7 @@ Actions:
     merge                --db-a --db-b --out
     reindex              --force
     update-description   --id --description
-    update-links         --id --content
+    recommend-api        --doc-id                    (B19, 替代旧 update-links)
     link-auto            --threshold --max-per-doc     (B2)
     migrate-embed-model  [--model <name>]              (B1 migration)
     config               (print current config)
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from typing import Any, Optional
 
@@ -39,7 +38,7 @@ from .sidebar_parser import parse_all_sidebars
 from .update_description import update_description
 
 ACTIONS = ("query", "build", "merge", "reindex", "update-description",
-           "update-links", "link-auto", "migrate-embed-model", "config")
+           "recommend-api", "link-auto", "migrate-embed-model", "config")
 
 
 # ---- factories (kept module-level so tests can monkeypatch them) -----------
@@ -109,10 +108,10 @@ def build_parser() -> argparse.ArgumentParser:
     ud.add_argument("--description", required=True)
     ud.add_argument("--config", default=None)
 
-    ul = sub.add_parser("update-links", help="extract & write bidirectional links")
-    ul.add_argument("--id", required=True)
-    ul.add_argument("--content", required=True,
-                    help="doc body markdown, or a path to a file containing it")
+    ul = sub.add_parser("recommend-api",
+                        help="call getRecommendInfo API and write bidirectional links (B19)")
+    ul.add_argument("--doc-id", required=True,
+                    help="source doc id (must already exist in the index)")
     ul.add_argument("--config", default=None)
 
     la = sub.add_parser("link-auto",
@@ -205,15 +204,17 @@ def _run_update_description(args: argparse.Namespace) -> Any:
     return doc
 
 
-def _run_update_links(args: argparse.Namespace) -> Any:
+def _run_recommend_api(args: argparse.Namespace) -> Any:
+    """B19: 调用 getRecommendInfo API 建立 source doc 与推荐 docs 的双向 link。
+
+    替代旧 _run_update_links（B19 破坏性变更：删除 markdown 解析，改用官方推荐 API）。
+    embedder 从配置初始化（新 doc 入库时立即嵌入并盖章 embed_model）。
+    """
     cfg = _load_cfg(args.config)
+    emb = make_embedder(cfg)
     idx = make_indexer(cfg)
     try:
-        content = args.content
-        if os.path.exists(content):
-            with open(content, encoding="utf-8") as f:
-                content = f.read()
-        linked = update_links(args.id, content, idx)
+        linked = update_links(args.doc_id, idx, emb)
     finally:
         idx.close()
     out = {"linked": linked}
@@ -314,7 +315,7 @@ _DISPATCH = {
     "merge": _run_merge,
     "reindex": _run_reindex,
     "update-description": _run_update_description,
-    "update-links": _run_update_links,
+    "recommend-api": _run_recommend_api,
     "link-auto": _run_link_auto,
     "migrate-embed-model": _run_migrate_embed_model,
     "config": _run_config,
