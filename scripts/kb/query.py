@@ -92,6 +92,40 @@ def _minmax(values: list[float]) -> list[float]:
     return [(v - lo) / (hi - lo) for v in values]
 
 
+def _bm25_text(doc: dict[str, Any]) -> str:
+    """B20: BM25 索引文本来源——优先 context（信息最丰富）。
+
+    优先级：
+      1. context（网页原始 markdown 内容，B14 新增）
+      2. description（非 NO_DESCRIPTION，agent 总结的精炼版）
+      3. title（兜底）
+
+    为什么 context 优先：context 是网页原始内容，包含最丰富的关键词，BM25
+    关键词匹配能召回更精准的结果。description 是 agent 总结，可能丢失关键词。
+    向量嵌入仍用 _embed_text（description 优先）——向量捕捉语义相似性，
+    description 精炼版更适合向量嵌入。
+    """
+    ctx = doc.get("context")
+    if ctx:
+        return ctx
+    desc = doc.get("description")
+    if desc and desc != NO_DESCRIPTION:
+        return desc
+    return doc["title"]
+
+
+def _embed_text(doc: dict[str, Any]) -> str:
+    """向量嵌入文本来源——description 优先，否则 title（不变）。
+
+    向量嵌入不用 context：context 是网页原始内容，可能很长且含噪声；
+    description 是 agent 总结的精炼版，更适合向量嵌入（捕捉语义相似性）。
+    """
+    desc = doc.get("description")
+    if desc and desc != NO_DESCRIPTION:
+        return desc
+    return doc["title"]
+
+
 def _check_model_compatibility(indexer: Any, embedder: Any) -> None:
     """B5: raise ValueError if embedder.model_name differs from the DB's
     embed_model. Empty embed_model in the DB (legacy) is treated as
@@ -139,7 +173,7 @@ def query(
     from rank_bm25 import BM25Okapi
 
     corpus = [
-        _tokenize(f"{c['title']} {c.get('description', NO_DESCRIPTION)}")
+        _tokenize(_bm25_text(c))
         for c in candidates
     ]
     bm25 = BM25Okapi(corpus)
