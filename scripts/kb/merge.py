@@ -102,6 +102,13 @@ def _merge_two(a: dict[str, Any], b: dict[str, Any]) -> tuple[dict[str, Any], bo
     for field in _SCALAR_FIELDS:
         merged[field] = _merge_scalar(field, a.get(field), b.get(field), a_newer)
 
+    # B22: context 不在 _SCALAR_FIELDS 中（语义不同：context 是网页原始内容
+    # 而非元数据），显式按 _merge_scalar 同样的"非空优先，否则 newer wins"
+    # 规则合并。空值判定为 ""（与 _is_empty 对非 description/links 字段一致）。
+    merged["context"] = _merge_scalar(
+        "context", a.get("context", ""), b.get("context", ""), a_newer,
+    )
+
     # links: union
     merged["links"] = _dedupe(list(a.get("links", [])) + list(b.get("links", [])))
 
@@ -111,10 +118,12 @@ def _merge_two(a: dict[str, Any], b: dict[str, Any]) -> tuple[dict[str, Any], bo
 
     # B4: content_hash recomputed via the single source of truth (includes
     # description + sorted links), so a description change is detectable.
+    # B22: context 必须传入 hash 公式，否则 context 变化无法触发 reindex。
     merged["content_hash"] = _make_content_hash(
         merged["title"], merged["url"], merged["doc_type"],
         merged.get("description", NO_DESCRIPTION),
         merged["links"],
+        context=merged.get("context", ""),
     )
 
     # B1: embed_model inherits from the newer source doc. The merge() entry
