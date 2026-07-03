@@ -54,33 +54,31 @@ def _add_link_bidirectional(
     max_per_doc: int,
     now: str,
 ) -> bool:
-    """Add a↔b bidirectional link if not present and both sides have capacity.
+    """Add a↔b bidirectional link, 分方向补全单向已存在的链接。
+
+    B28: 分方向检查容量与存在性——仅当某方向容量未满且链接不存在时才补全。
+    返回 True 若任一方向新增了 link；False 若两个方向都已存在或都满。
+
+    与 links.py _add_bidirectional_link 语义一致（返回 True 若任一方向新增）。
+    旧逻辑在任一方满时直接返回 False，导致单向已存在的链接（a→b 已存在）
+    因 b 容量满无法回链（b→a 缺失），丢失 b→a 损害检索召回。
 
     Mutates a_doc["links"] and b_doc["links"] in place (caller then persists
-    via set_payload). Returns True ONLY if a complete bidirectional pair was
-    added (both directions). Returns False if:
-      - self-link
-      - already linked both ways
-      - capacity exceeded on EITHER side (we refuse to add a one-way link;
-        bidirectionality is the contract — Rule 3 禁止简化实现)
+    via set_payload).
     """
     if a_id == b_id:
         return False
     a_links: list[str] = a_doc["links"]
     b_links: list[str] = b_doc["links"]
-    already = b_id in a_links and a_id in b_links
-    if already:
-        return False
-    # Both sides must have capacity — bidirectional is the contract.
-    if len(a_links) >= max_per_doc:
-        return False
-    if len(b_links) >= max_per_doc:
-        return False
-    if b_id not in a_links:
+    # 分方向补全：容量未满且不存在的方向才加
+    added = False
+    if b_id not in a_links and len(a_links) < max_per_doc:
         a_links.append(b_id)
-    if a_id not in b_links:
+        added = True
+    if a_id not in b_links and len(b_links) < max_per_doc:
         b_links.append(a_id)
-    return True
+        added = True
+    return added
 
 
 def _persist_links(indexer: Any, doc_id: str, doc: dict[str, Any], now: str) -> None:
