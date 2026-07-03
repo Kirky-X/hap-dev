@@ -24,12 +24,14 @@ ID_FIELD = "id"
 # B9: whitelist of payload fields set_payload is allowed to write. Any field
 # outside this set is rejected with ValueError (Rule 12: fail loud) — prevents
 # callers from polluting the payload schema or bypassing upsert for vector-
-# bearing fields like 'title' (whose change MUST go through upsert to refresh
-# the vector). NB: 'title' is in the whitelist because links.py / merge.py
-# legitimately write it via set_payload when merging. The vector is NOT in
-# this set because set_payload never touches the vector by design.
+# bearing fields. B25: title/description removed — they are vector embedding
+# sources (_embed_text computes from description/title), so writing them via
+# set_payload would bypass upsert and leave the vector stale. links.py /
+# merge.py do NOT write these via set_payload (links only writes
+# links/updated_at/content_hash; merge uses put()). The vector is NOT in this
+# set because set_payload never touches the vector by design.
 PAYLOAD_FIELDS = frozenset({
-    "id", "title", "doc_type", "url", "description",
+    "id", "doc_type", "url",
     "links", "created_at", "updated_at", "content_hash", "embed_model",
     "context",
 })
