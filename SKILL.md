@@ -11,7 +11,7 @@ license: MIT
 - **create**（上游）— 基于 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程，模板复制 + SDK 自动探测 + bundleName 派生 + main_pages.json/EntryAbility 同步。解决"工程**怎么起**"。
 - **fix**（修复）— 聚合三套修复轨道：编译错误（21 类 error-fixes references）、运行时 JSCrash（5 个 Node 脚本 + faultlogger/hilog 证据链）、语法规范（grammar references）。按症状路由。解决"**错了怎么改**"。
 - **test**（验证）— 平台检测 + 条件启用 DevEco MCP（@deveco-codegenie/mcp）。Linux 静态检查（check_ets_files/build_project）；Windows/macOS 模拟器全功能（start_app/UI 树/UI 操作/hilog/verify_ui 自然语言用例）。解决"**对不对**"。
-- **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `paraphrase-MiniLM-L3-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接。子动作：query/build/merge/reindex/update-description/update-links/config。解决"**本地能查什么**"。
+- **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `paraphrase-MiniLM-L3-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接 + context 网页内容缓存。子动作：query/build/merge/reindex/update-description/recommend-api/fetch-content/update-content/migrate-context/refresh-expired/link-auto/migrate-embed-model/config。解决"**本地能查什么**"。
 - **search**（在线搜索）— 双端点（developer.huawei.com + device.harmonyos.com）多 catalog 路由，HTML→Markdown 清洗。作为 kb description/链接填充的合法通道之一。解决"**网上有什么**"。
 
 ## 子命令路由
@@ -67,15 +67,19 @@ python3 -m scripts.test.cli check                                    # 检测平
 python3 -m scripts.test.cli run --ets-files <dir>                    # Linux 静态检查
 python3 -m scripts.test.cli run --bundle-name <name> --test-plan <p> # Win/macOS 模拟器
 
-# kb（9 子动作）
+# kb（13 子动作）
 python3 -m scripts.kb.cli query "<关键词>" [--top-k 5]
 python3 -m scripts.kb.cli build
 python3 -m scripts.kb.cli merge --other <other.qdrant>
 python3 -m scripts.kb.cli reindex --force
 python3 -m scripts.kb.cli update-description <id> "<desc>"
-python3 -m scripts.kb.cli update-links --id <id> --content "<markdown>"
-python3 -m scripts.kb.cli link-auto [--threshold 0.9] [--max-per-doc 10]   # B2 余弦>0.9 自动双向链接
-python3 -m scripts.kb.cli migrate-embed-model [--model <name>]              # B1 回填 embed_model
+python3 -m scripts.kb.cli recommend-api --doc-id <id>                          # B19 API 推荐双向链接
+python3 -m scripts.kb.cli fetch-content --url <url>                            # B16 抓取网页 markdown
+python3 -m scripts.kb.cli update-content --doc-id <id> --description "<desc>" --context-file <file>  # B17 更新 context+向量
+python3 -m scripts.kb.cli migrate-context                                     # B14 回填 context 字段
+python3 -m scripts.kb.cli refresh-expired [--expire-days 30]                   # B18 列出过期 docs
+python3 -m scripts.kb.cli link-auto [--threshold 0.9] [--max-per-doc 10]       # B2 余弦>0.9 自动双向链接
+python3 -m scripts.kb.cli migrate-embed-model [--model <name>]                 # B1 回填 embed_model
 python3 -m scripts.kb.cli config
 
 # search
@@ -149,6 +153,9 @@ flowchart LR
 | kb merge 报 `embed_model mismatch` | 两 DB 用了不同 embed_model → 拒绝合并。先对两库分别 reindex 到同一模型再 merge | 已污染库需 `build_db.py` 从 sidebars 重建 |
 | DB docs 缺 `embed_model` 字段（legacy 库） | 跑 `python3 -m scripts.kb.cli migrate-embed-model` 回填 config.json 的 embed_model | 已被多模型污染（mixed）只能 `build_db.py` 重建 |
 | docs `links=[]` 无邻居 | 跑 `python3 -m scripts.kb.cli link-auto` 按 cosine >0.9 自动建立双向链接 | 仍 0 邻居说明 docs 向量彼此正交，检查 embedder 是否正常 |
+| docs 缺 `context` 字段（legacy 库，B14 前） | 跑 `python3 -m scripts.kb.cli migrate-context` 回填 `context=""`（幂等：用 `iter_raw_payloads` 检查字段是否真实存在） | 已被多版本污染只能 `python3 scripts/kb/build_db.py` 重建 |
+| `recommend-api` 调 API 不可达（HTTP 5xx/超时） | `get_recommendations` raise ValueError（fail-loud，不静默返回空列表）→ 检查网络/DNS，重试一次 | 仍失败则该 source doc 暂不建链，记录到 stderr 跳过，继续处理其他 doc |
+| `fetch-content` url 抓取失败（catalog 不支持/URL 失效） | `fetch_content` raise ValueError → `update_links` catch 后跳过该推荐，原因输出到 stderr（Rule 12：跳过原因显式输出，不静默吞掉） | 多个推荐都失败则该 source doc 链接稀疏，agent 后续可手动 `update-content` 补 context |
 
 > 🔴 **CHECKPOINT**：fix 子命令的 runtime-fix 轨道执行 `hdc` 命令(faultlog/hilog 采集)前 MUST 确认目标设备序列号正确。`hdc -t <serial> shell ...` 误操作可能影响生产设备。Linux 平台 hdc 工具不可用,自动降级为日志文件解析模式。
 
@@ -159,6 +166,7 @@ flowchart LR
 3. **禁止简化实现** — 双向链接必须真正双向写入；description 回填必须重算向量；合并必须字段级 update_at 比较。
 4. **禁止静默吞错** — 所有脚本错误显式上报（非零退出码/errors 字段/异常），不藏默认值背后。
 5. **禁止跨模型向量空间混用** — 同维度不同 embed_model 的向量空间不兼容（如 384 维 paraphrase-MiniLM-L3-v2 vs all-MiniLM-L6-v2 余弦相似度无意义）。query/merge/reindex 入口 MUST 校验 embed_model 一致；mismatch 时 fail-loud，禁止"维度相同就放过"。新库 MUST 跑 `migrate-embed-model` 回填 embed_model 字段；老库迁移完成后 MUST 跑 `link-auto` 建立默认双向链接。
+6. **禁止跳过 `migrate-context` 直接 query** — legacy 库（B14 前）docs 缺 `context` 字段，BM25 索引优先用 context（信息丰富），字段缺失会让 BM25 退化为只匹配 title/description（关键词召回质量下降）。新库或迁移后 MUST 跑 `python3 -m scripts.kb.cli migrate-context` 回填 `context=""`（幂等：用 `iter_raw_payloads` 区分"字段缺失"和"字段为空"，避免重复迁移）。
 
 ## 平台支持矩阵
 
