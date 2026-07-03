@@ -1,7 +1,11 @@
-"""B16: 抓取 HarmonyOS 文档 url 网页内容为 markdown。
+"""B16/B18: 抓取 HarmonyOS 文档 url 网页内容为 markdown + 过期检测。
 
 fetch_content(url) 解析 url 提取 (object_id, catalog)，调用
 scripts.search.detail.detail() 获取 doc 内容（HTML 已转 Markdown），返回 str。
+
+is_content_expired(doc, expire_days): 检查 doc.updated_at 是否距今 > expire_days。
+should_refresh_content(doc, new_context): 对比 new_context sha1 与 doc.context sha1。
+touch_updated_at(doc_id, indexer): 只更新 updated_at，不改 context/向量/hash。
 
 不支持的 catalog 路径 raise ValueError；detail() 返回 {'error': ...} 时 raise
 ValueError（fail-loud，不静默返回空字符串）。
@@ -12,6 +16,9 @@ catalog 在 path 倒数第二段，object_id 在最后一段。
 """
 from __future__ import annotations
 
+import hashlib
+from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import urlparse
 
 from scripts.search.detail import detail
@@ -29,6 +36,14 @@ URL_PATH_TO_CATALOG: dict[str, str] = {
     "harmonyos-best-practices": "harmonyos-best-practices",
     "harmonyos-architecture": "harmonyos-architecture",
 }
+
+# 默认过期天数（D6/D9）。30 天内重复访问同一 url 用缓存，不重新抓取。
+DEFAULT_EXPIRE_DAYS = 30
+
+
+def _now_iso() -> str:
+    """当前 UTC 时间的 ISO8601 字符串（与 sidebar_parser._now_iso 一致）。"""
+    return datetime.now(timezone.utc).isoformat()
 
 
 def extract_object_id_and_catalog(url: str) -> tuple[str, str]:
@@ -86,3 +101,77 @@ def fetch_content(url: str) -> str:
     if "error" in result:
         raise ValueError(f"fetch_content: detail 抓取失败: {result['error']}")
     return result.get("content", "") or ""
+
+
+def is_content_expired(doc: dict[str, Any], expire_days: int = DEFAULT_EXPIRE_DAYS) -> bool:
+    """检查 doc 的 context 是否过期（updated_at 距今 > expire_days）。
+
+    Args:
+        doc: doc dict，必须含 ``updated_at`` 字段（ISO8601 字符串）。
+        expire_days: 过期阈值天数，默认 30。
+
+    Returns:
+        True 若 updated_at 距今 > expire_days 天；False 若 <= expire_days。
+
+    Raises:
+        ValueError: updated_at 字段缺失或无法解析（fail-loud）。
+    """
+    updated_at = doc.get("updated_at")
+    if not updated_at:
+        raise ValueError("is_content_expired: doc 缺少 updated_at 字段")
+
+    # fromisoformat 支持 +00:00 时区后缀；如果带 'Z' 后缀需替换为 +00:00
+    ts_str = updated_at.replace("Z", "+00:00") if updated_at.endswith("Z") else updated_at
+    try:
+        updated_dt = datetime.fromisoformat(ts_str)
+    except ValueError as exc:
+        raise ValueError(
+            f"is_content_expired: updated_at 无法解析为 ISO8601: {updated_at!r}"
+        ) from exc
+
+    # 如果 updated_at 是 naive datetime（无时区），假设为 UTC
+    if updated_dt.tzinfo is None:
+        updated_dt = updated_dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    age = now - updated_dt
+    return age.days > expire_days
+
+
+def should_refresh_content(doc: dict[str, Any], new_context: str) -> bool:
+    """对比 new_context 的 sha1 与 doc.context 的 sha1。
+
+    一致 → 网页没变，只需 touch_updated_at（节省重新总结 description 的 LLM 调用）。
+    不一致 → 网页变了，需要全量更新（context + description + 向量 + hash + links）。
+
+    Args:
+        doc: doc dict，含 ``context`` 字段（可能为 ""）。
+        new_context: 重新抓取的网页内容。
+
+    Returns:
+        True 若 sha1 不同（需要刷新）；False 若 sha1 相同（无需刷新）。
+    """
+    old_hash = hashlib.sha1((doc.get("context") or "").encode("utf-8")).hexdigest()
+    new_hash = hashlib.sha1((new_context or "").encode("utf-8")).hexdigest()
+    return old_hash != new_hash
+
+
+def touch_updated_at(doc_id: str, indexer: Any) -> None:
+    """只更新 doc 的 updated_at 字段，不改 context/向量/hash/description。
+
+    用于 should_refresh_content 返回 False 的场景：网页没变，但 updated_at 已
+    过期，刷一下时间戳避免下次 is_content_expired 误判。
+
+    Args:
+        doc_id: 目标 doc id。
+        indexer: QdrantIndexer（或兼容）实例。
+
+    Raises:
+        KeyError: doc 不存在（fail-loud）。set_payload 内部已校验白名单，
+            updated_at 在 PAYLOAD_FIELDS 内，不会被拒。
+    """
+    # 检查 doc 是否存在（fail-loud，避免 set_payload 静默失败）
+    if indexer.get(doc_id) is None:
+        raise KeyError(f"touch_updated_at: doc_id not in index: {doc_id}")
+    indexer.set_payload(doc_id, {"updated_at": _now_iso()})
+
