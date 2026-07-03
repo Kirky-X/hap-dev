@@ -33,7 +33,7 @@ from .content_fetcher import (
     is_content_expired,
 )
 from .embed import Embedder
-from .indexer import ID_FIELD, QdrantIndexer
+from .indexer import QdrantIndexer
 from .links import update_links
 from .links_auto import auto_link
 from .merge import merge as do_merge
@@ -315,24 +315,33 @@ def _run_migrate_context(args: argparse.Namespace) -> Any:
     Idempotent：已有 context 字段（无论是否为空）的 doc 跳过。用 iter_raw_payloads
     检查原始 payload 字段是否存在——_payload_from 会把缺失的 context 默认成 ""，
     无法区分"字段缺失"和"字段为空"。
+
+    性能：用 Qdrant 批量 set_payload（一次写所有缺字段的 point），避免逐个
+    idx.set_payload（每个都要 get() scroll 查询存在性，710 docs 会超时）。
     """
     cfg = _load_cfg(args.config)
     idx = make_indexer(cfg)
     try:
-        raw_payloads = idx.iter_raw_payloads()
-        migrated = 0
+        raw_items = idx.iter_raw_payloads()
+        migrated_pids: list[int] = []
         skipped = 0
-        for raw in raw_payloads:
+        for pid, raw in raw_items:
             if "context" in raw:
                 skipped += 1
                 continue
-            # context 字段缺失 → 写 ""（确保字段存在）
-            doc_id = raw[ID_FIELD]
-            idx.set_payload(doc_id, {"context": ""})
-            migrated += 1
+            migrated_pids.append(pid)
+        # 批量写 context=""（Qdrant set_payload 支持一次写多个 point）
+        BATCH = 256
+        for i in range(0, len(migrated_pids), BATCH):
+            batch = migrated_pids[i:i + BATCH]
+            idx.client.set_payload(
+                collection_name=idx.collection,
+                payload={"context": ""},
+                points=batch,
+            )
     finally:
         idx.close()
-    out = {"migrated": migrated, "skipped": skipped}
+    out = {"migrated": len(migrated_pids), "skipped": skipped}
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return out
 
