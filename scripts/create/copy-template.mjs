@@ -59,8 +59,10 @@ function parseArgs(argv) {
   }
 
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  // 实际模板位置：<hap-dev>/references/project-template/application
+  // （曾误指向 ../../deveco-create-project/application，该目录不存在 → 必现失败）
   const templateDir = values.get('template-dir') ??
-    path.resolve(scriptDir, '../../deveco-create-project/application');
+    path.resolve(scriptDir, '../../references/project-template/application');
   const projectPath = values.get('project-path');
   const appName = values.get('app-name');
   const bundleName = values.get('bundle-name') ?? (appName
@@ -164,7 +166,16 @@ async function main() {
 
   const resolved = await resolve(args);
   if (!fs.existsSync(args.templateDir)) {
-    throw new Error(`Template directory not found: ${args.templateDir}`);
+    // 结构化错误：明确提示模板目录缺失 + 已解析路径 + 修复方式，
+    // 与 APP_NAME_INVALID / PROJECT_EXISTS 风格一致（便于 agent 解析降级）。
+    console.error(JSON.stringify({
+      code: 'TEMPLATE_DIR_NOT_FOUND',
+      message: `Template directory not found: ${args.templateDir}`,
+      templateDir: args.templateDir,
+      hint: '默认模板应位于 <hap-dev>/references/project-template/application。'
+        + '若用 --template-dir 覆盖，请确认路径存在且为 ArkTS 工程模板根目录。',
+    }, null, 2));
+    process.exit(3);
   }
 
   fs.mkdirSync(args.projectPath, { recursive: true });

@@ -66,7 +66,11 @@ def detail(
     }
 
     should_close = client is None
-    client = client or httpx.Client(timeout=TIMEOUT, headers=COMMON_HEADERS)
+    # follow_redirects=False（httpx 默认）：SSRF 防护 —— 拒绝 3xx 跳转到内网/任意 host。
+    # 显式写出而非依赖默认值，避免未来误改 / httpx 版本漂移引入重定向跟随。
+    client = client or httpx.Client(
+        timeout=TIMEOUT, headers=COMMON_HEADERS, follow_redirects=False
+    )
     try:
         resp = client.post(DETAIL_URL, json=payload)
         resp.raise_for_status()
@@ -107,7 +111,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Fetch a HarmonyOS developer doc by object_id and catalog",
     )
-    parser.add_argument("object_id", help="Document object ID (last segment of doc URL)")
+    parser.add_argument(
+        "object_id", help="Document object ID (last segment of doc URL)"
+    )
     parser.add_argument(
         "catalog_name",
         choices=DEVELOPER_CATALOGS,

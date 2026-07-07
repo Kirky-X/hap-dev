@@ -1,6 +1,6 @@
 ---
 name: hap-dev
-description: "鸿蒙应用开发技能（5 子命令：create/fix/test/kb/search）。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/Stage 模型/创建鸿蒙工程/ArkTS 编译错误/jscrash/HAP 构建/文档搜索/知识库"
+description: "鸿蒙应用开发技能。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/Stage 模型/创建鸿蒙工程/ArkTS 编译错误/jscrash/HAP 构建/文档搜索/知识库"
 license: MIT
 ---
 

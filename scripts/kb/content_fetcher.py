@@ -14,6 +14,7 @@ URL 路径片段 → catalog 映射覆盖 9 个 HarmonyOS 文档 catalog。Harmo
 形如 ``https://developer.huawei.com/consumer/cn/doc/<catalog>/<object_id>``，
 catalog 在 path 倒数第二段，object_id 在最后一段。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -39,6 +40,18 @@ URL_PATH_TO_CATALOG: dict[str, str] = {
 
 # 默认过期天数（D6/D9）。30 天内重复访问同一 url 用缓存，不重新抓取。
 DEFAULT_EXPIRE_DAYS = 30
+
+# HarmonyOS 官方文档站点 host 白名单（SSRF 防护）。
+# fetch_content 只信任这两个 host；其余一律拒绝。即便 detail() 实际只请求
+# 固定的 DETAIL_HOST，url 的 host 仍必须语义合法 —— 拒绝攻击者用合法
+# catalog 路径段伪装的非法 host（如 ``https://evil.com/harmonyos-guides/...``）。
+# 用 frozenset 避免误改；hostname 经 urlparse 规范化为小写、剥离端口。
+ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "developer.huawei.com",
+        "device.harmonyos.com",
+    }
+)
 
 
 def _now_iso() -> str:
@@ -83,6 +96,31 @@ def extract_object_id_and_catalog(url: str) -> tuple[str, str]:
     return object_id, URL_PATH_TO_CATALOG[catalog_key]
 
 
+def _validate_host(url: str) -> str:
+    """校验 url 的 host 在 HarmonyOS 文档白名单内；返回规范化 host。
+
+    defense-in-depth：``detail()`` 实际只请求固定 DETAIL_HOST，但 url 的 host
+    仍必须语义合法 —— 拒绝攻击者用合法 catalog 路径段伪装的非法 host
+    （如 ``https://evil.com/harmonyos-guides/<id>``）。
+
+    Args:
+        url: 待校验的 HarmonyOS 文档 url。
+
+    Returns:
+        规范化的小写 host（``urlparse().hostname`` 已剥离端口/大小写）。
+
+    Raises:
+        ValueError: host 缺失或不在 ``ALLOWED_HOSTS`` 白名单。
+    """
+    host = urlparse(url).hostname
+    if host is None or host not in ALLOWED_HOSTS:
+        raise ValueError(
+            f"fetch_content: url host {host!r} 不在允许白名单 {sorted(ALLOWED_HOSTS)}；"
+            f"仅允许 HarmonyOS 官方文档站点（SSRF 防护）。url={url!r}"
+        )
+    return host
+
+
 def fetch_content(url: str) -> str:
     """抓取 url 对应的 HarmonyOS 文档内容（markdown 字符串）。
 
@@ -94,16 +132,20 @@ def fetch_content(url: str) -> str:
         仍返回空 str（不视为错误——某些 doc 可能内容为空但抓取成功）。
 
     Raises:
-        ValueError: url 解析失败（catalog 未知）或 detail() 返回 error。
+        ValueError: url 解析失败（catalog 未知）、host 不在白名单（SSRF）、
+            或 detail() 返回 error。
     """
     object_id, catalog = extract_object_id_and_catalog(url)
+    _validate_host(url)  # SSRF 防护：host 必须在 HarmonyOS 官方白名单
     result = detail(object_id, catalog)
     if "error" in result:
         raise ValueError(f"fetch_content: detail 抓取失败: {result['error']}")
     return result.get("content", "") or ""
 
 
-def is_content_expired(doc: dict[str, Any], expire_days: int = DEFAULT_EXPIRE_DAYS) -> bool:
+def is_content_expired(
+    doc: dict[str, Any], expire_days: int = DEFAULT_EXPIRE_DAYS
+) -> bool:
     """检查 doc 的 context 是否过期（updated_at 距今 > expire_days）。
 
     Args:
@@ -121,7 +163,9 @@ def is_content_expired(doc: dict[str, Any], expire_days: int = DEFAULT_EXPIRE_DA
         raise ValueError("is_content_expired: doc 缺少 updated_at 字段")
 
     # fromisoformat 支持 +00:00 时区后缀；如果带 'Z' 后缀需替换为 +00:00
-    ts_str = updated_at.replace("Z", "+00:00") if updated_at.endswith("Z") else updated_at
+    ts_str = (
+        updated_at.replace("Z", "+00:00") if updated_at.endswith("Z") else updated_at
+    )
     try:
         updated_dt = datetime.fromisoformat(ts_str)
     except ValueError as exc:
@@ -174,4 +218,3 @@ def touch_updated_at(doc_id: str, indexer: Any) -> None:
     if indexer.get(doc_id) is None:
         raise KeyError(f"touch_updated_at: doc_id not in index: {doc_id}")
     indexer.set_payload(doc_id, {"updated_at": _now_iso()})
-
