@@ -22,21 +22,38 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
-from scripts.search.detail import detail
+from scripts.search.detail import DEVELOPER_CATALOGS, detail
 
-# url path 中的 catalog 关键字 → detail() 期望的 catalog 名称。
-# 当前是一一映射；如果将来 detail() 接受别名，可在此扩展。
-URL_PATH_TO_CATALOG: dict[str, str] = {
-    "harmonyos-guides": "harmonyos-guides",
-    "harmonyos-references": "harmonyos-references",
-    "harmonyos-faqs": "harmonyos-faqs",
-    "harmonyos-design": "harmonyos-design",
-    "harmonyos-atomic": "harmonyos-atomic",
-    "harmonyos-agc": "harmonyos-agc",
-    "harmonyos-app": "harmonyos-app",
-    "harmonyos-best-practices": "harmonyos-best-practices",
-    "harmonyos-architecture": "harmonyos-architecture",
-}
+# url path 中的 catalog 路径段 → detail() 期望的 catalog 名称。
+#
+# BUG 修复（T-verify）：旧映射用 `harmonyos-*` 前缀（如 harmonyos-design /
+# harmonyos-architecture），但 detail() 底层 API 实际只接受 DEVELOPER_CATALOGS
+# （best-practices / harmonyos-guides / harmonyos-references）三个 catalog。旧
+# 映射与真实能力完全不匹配 → fetch-content 对任意真实 URL 都 raise ValueError。
+#
+# 修复策略：
+#   1. 路径段本身就在 DEVELOPER_CATALOGS 中的（best-practices /
+#      harmonyos-guides / harmonyos-references）→ 直接复用，detail() 能抓到正文。
+#   2. 其余路径段（architecture-guides / app / design-guides / atomic-guides 等，
+#      占预构建库大多数）→ detail() 上游 API 返回 92531031 document not found，
+#      抓取不可能成功。这里显式 raise，禁止误映射成别的 catalog 去抓（会拿到
+#      错误/空文档），由调用方 fail-loud 报告，不写半截数据。
+#
+# 映射表只保留"路径段 == 真实 catalog"的直通项；其余一律走下面的
+# _unsupported_catalog_segment 显式报错。
+URL_PATH_TO_CATALOG: dict[str, str] = {c: c for c in DEVELOPER_CATALOGS}
+
+
+def _unsupported_catalog_segment(catalog_key: str, url: str) -> ValueError:
+    """构造"该 catalog 的 detail API 暂不支持"的显式错误。"""
+    return ValueError(
+        f"extract_object_id_and_catalog: url 路径段 {catalog_key!r} 对应的文档 "
+        f"detail API 暂不支持（url={url!r}）。当前 detail() 仅支持 "
+        f"{sorted(DEVELOPER_CATALOGS)} 三类 catalog；其余 catalog "
+        f"（architecture-guides / app / design-guides / atomic-guides 等）的 "
+        f"华为上游 API 返回 92531031 document not found，无法抓取正文。 "
+        f"请改用 build 时的 sidebars 源或等待 API 支持。"
+    )
 
 # 默认过期天数（D6/D9）。30 天内重复访问同一 url 用缓存，不重新抓取。
 DEFAULT_EXPIRE_DAYS = 30
@@ -89,10 +106,9 @@ def extract_object_id_and_catalog(url: str) -> tuple[str, str]:
     catalog_key = segments[-2]
     object_id = segments[-1]
     if catalog_key not in URL_PATH_TO_CATALOG:
-        raise ValueError(
-            f"extract_object_id_and_catalog: 不支持的 catalog 路径段 {catalog_key!r} "
-            f"(url={url!r}); expected one of {sorted(URL_PATH_TO_CATALOG.keys())}"
-        )
+        # 不在直通项中 = 该 catalog 的 detail API 暂不支持（上游限制），
+        # 显式报错而非静默映射成别的 catalog 去抓错误内容。
+        raise _unsupported_catalog_segment(catalog_key, url)
     return object_id, URL_PATH_TO_CATALOG[catalog_key]
 
 

@@ -50,8 +50,18 @@
 | IDataSource Type Errors | `LazyForEach` 需 IDataSource 实现 | 为 LazyForEach 实现 IDataSource 接口 |
 | Duplicate Entry Errors | 同一文件多个 `@Entry` | 删除多余 `@Entry`，子组件用 `@Component` |
 | Possibly Null Errors | 访问属性时对象可能为 null | 用 `!== null` 检查或可选链 |
+| Context Type Errors | `getHostContext()` 返回 `Context \| undefined` 直接传参报类型错 | 判空收窄或 `as Context` 前置校验（见 `context_type_errors.md`） |
+| Color Consistency Errors | 硬编码颜色值触发编译警告 | 用资源引用（`$r('app.color.xxx')`）替代硬编码色值 |
+| Decorator State Errors | `@State` 等装饰器用在普通 class / `@Component` 外 | 装饰器只用于 `@Component` 修饰的 struct 内 |
+| Display Listener Type Errors | `display.on/off` 监听器类型不匹配 | 按官方回调签名声明 listener（见 `display_listener_type_errors.md`） |
+| FontColor Property Errors | `fontColor` 用在容器组件上 | `fontColor` 仅限文本类组件（Text/Span/Button） |
+| Implementation Not Allowed Errors | 未用 `@Component` 装饰就编写 UI 结构 | UI 组件必须 `@Component` + `build()` 返回 UI |
+| Window Rect/Size Type Errors | `window.Point` 不存在 / `Rect`、`Size` 字段误用 | 使用 `window.Rect`/`window.Size` 的真实字段（见 `window_rect_size_errors.md`） |
+| Any Type Errors | 使用 `any` / `unknown` 触发 ArkTS 限制 | 改用显式具体类型 |
+| BreakpointType Type Errors | GridRow 直接把字符串当 `BreakpointType` 用 | 使用 `BreakpointType` 枚举成员而非字符串字面量 |
+| Utility Type Errors | 使用 ArkTS 不支持的 TS 工具类型（`Partial`/`Pick` 等） | 手写显式的具体 interface / 类型别名替代（arkts-no-utility-types） |
 
-> 21 类对应 references 文件命名（除 `Window Rect/Size Type Errors` 用 `window_rect_size_errors.md`，其余按下划线小写约定）。完整文档：[`references/error-fixes/`](../error-fixes/)；代码示例：`references/error-fixes/assets/*.ets`。
+> 31 类对应 references 文件命名（除 `Window Rect/Size Type Errors` 用 `window_rect_size_errors.md`，其余按下划线小写约定）。完整文档：[`references/error-fixes/`](../error-fixes/)；代码示例：`references/error-fixes/assets/*.ets`。
 
 ### 执行流程
 

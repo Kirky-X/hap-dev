@@ -24,28 +24,36 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any, Optional
 
-from .config import DEFAULT_CONFIG, ensure_config, load_config
-from .content_fetcher import (
+# Allow both ``python3 -m scripts.kb.cli`` and direct
+# ``python3 <skill_root>/scripts/kb/cli.py`` invocation by ensuring the
+# skill root (hap-dev) is on sys.path when run as a plain script.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.kb.config import DEFAULT_CONFIG, ensure_config, load_config
+from scripts.kb.content_fetcher import (
     DEFAULT_EXPIRE_DAYS,
     fetch_content,
     is_content_expired,
 )
-from .embed import Embedder
-from .indexer import QdrantIndexer
-from .links import update_links
-from .links_auto import auto_link
-from .merge import merge as do_merge
-from .query import query as do_query
-from .reindex import reindex as do_reindex
-from .sidebar_parser import parse_all_sidebars
-from .update_content import update_content
-from .update_description import update_description
+from scripts.kb.embed import Embedder
+from scripts.kb.indexer import QdrantIndexer
+from scripts.kb.links import update_links
+from scripts.kb.links_auto import auto_link
+from scripts.kb.merge import merge as do_merge
+from scripts.kb.query import query as do_query
+from scripts.kb.reindex import reindex as do_reindex
+from scripts.kb.sidebar_parser import parse_all_sidebars
+from scripts.kb.update_content import update_content
+from scripts.kb.update_description import update_description
 
 ACTIONS = ("query", "build", "merge", "reindex", "update-description",
            "recommend-api", "link-auto", "migrate-embed-model", "config",
-           "fetch-content", "update-content", "migrate-context", "refresh-expired")
+           "fetch-content", "update-content", "migrate-context",
+           "refresh-expired", "fetch-and-update")
 
 
 # ---- factories (kept module-level so tests can monkeypatch them) -----------
@@ -168,6 +176,19 @@ def build_parser() -> argparse.ArgumentParser:
                         help="backfill context field on legacy docs (B14 migration)")
     mc.add_argument("--config", default=None)
 
+    # T-verify: 一体化增量更新——抓取正文(context) + 回填 description + 向量。
+    # 禁止只回填 description 而漏掉 context（Rule 12/需求：增量必须带完整页面内容）。
+    # 不支持的 catalog 显式报错，不写半截数据。
+    fau = sub.add_parser(
+        "fetch-and-update",
+        help="fetch url content + backfill context+description+vector atomically (T-verify)",
+    )
+    fau.add_argument("--url", required=True, help="HarmonyOS doc url to fetch")
+    fau.add_argument("--doc-id", required=True, help="target doc id in the index")
+    fau.add_argument("--description", default=None,
+                     help="≤200字描述；省略时从抓取正文自动生成首段摘要")
+    fau.add_argument("--config", default=None)
+
     re = sub.add_parser("refresh-expired",
                         help="list docs whose content has expired (B18, does NOT refresh)")
     re.add_argument("--expire-days", type=int, default=None,
@@ -271,6 +292,66 @@ def _run_fetch_content(args: argparse.Namespace) -> Any:
     # fetch_content 不需要 indexer/embedder，只调用 detail API
     content = fetch_content(args.url)
     out = {"content": content}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return out
+
+
+def _auto_summary(content: str, fallback: str, max_len: int = 200) -> str:
+    """从抓取正文自动生成 ≤max_len 字的描述（无需 LLM，确定性逻辑）。
+
+    去掉 markdown 标题标记/#、空行、列表符号（-/*/#）等无意义片段，取第一个
+    有意义的句子/段落作为摘要。若正文无可提取内容则用 fallback（url）。
+    """
+    import re
+
+    # 导航/目录等无实质内容的噪声片段，整句跳过
+    NOISE_HINTS = ("目录", "chevron", "table of contents", "toc", "上一篇",
+                   "下一篇", "previous", "next", "首页", "目录chevron")
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        # strip 常见 markdown 噪声：标题 #、列表 -/*、引用 >
+        cleaned = re.sub(r"^[#>\-\*\s]+", "", line).strip()
+        # 跳过过短或无实质内容（如纯 "list"、目录锚点、噪声提示）
+        if len(cleaned) < 8 or any(h in cleaned.lower() for h in NOISE_HINTS):
+            continue
+        # 取第一句（中英文句号/换行截断）
+        sent = re.split(r"[。.!?！？\n]", cleaned)[0].strip()
+        if len(sent) >= 8 and not any(h in sent.lower() for h in NOISE_HINTS):
+            return sent[:max_len]
+    return fallback[:max_len]
+
+
+def _run_fetch_and_update(args: argparse.Namespace) -> Any:
+    """T-verify: 抓取 url 正文 → 原子回填 context+description+向量。
+
+    禁止只回填 description：fetch-and-update 必须拿到真实 context（页面正文）。
+    若 fetch_content 失败（catalog 不支持 / url 失效），显式 raise，不写半截数据。
+    description 省略时从正文首段自动生成 ≤200 字摘要（截断保护）。
+    """
+    cfg = _load_cfg(args.config)
+    emb = make_embedder(cfg)
+    idx = make_indexer(cfg)
+    try:
+        # 1. 抓取真实正文（fail-loud：catalog 不支持 / 网络失败都会 raise）
+        content = fetch_content(args.url)
+        if not content or not content.strip():
+            raise ValueError(
+                f"fetch-and-update: 抓取到空正文，拒绝写半截数据 (url={args.url!r})"
+            )
+        # 2. description：优先用显式传入，否则从正文自动生成首段摘要
+        description = (args.description or "").strip()
+        if not description:
+            description = _auto_summary(content, fallback=args.url)
+        # 截断保护：description ≤ 200 字
+        if len(description) > 200:
+            description = description[:197].rstrip() + "…"
+        # 3. 原子写入 context + description + 向量 + hash
+        update_content(args.doc_id, content, description, idx, emb)
+    finally:
+        idx.close()
+    out = {"updated": args.doc_id, "context_len": len(content), "description": description}
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return out
 
@@ -469,6 +550,7 @@ _DISPATCH = {
     "config": _run_config,
     # B14/T028: 4 个新子命令
     "fetch-content": _run_fetch_content,
+    "fetch-and-update": _run_fetch_and_update,
     "update-content": _run_update_content,
     "migrate-context": _run_migrate_context,
     "refresh-expired": _run_refresh_expired,

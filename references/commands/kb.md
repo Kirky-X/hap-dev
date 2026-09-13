@@ -6,7 +6,7 @@
 
 ## 子动作路由表
 
-命令格式：`python3 -m scripts.kb.cli <action> [args]`
+命令格式：`python3 -m scripts.kb.cli <action> [args]`（也支持绝对路径直接调用 `python3 {SKILL_DIR}/scripts/kb/cli.py`，二者等价）
 
 | 子动作 | 用途 | 关键参数 |
 | ---- | ---- | ---- |
@@ -15,8 +15,15 @@
 | `merge` | 合并两个库为新库 | `--db-a` `--db-b` `--out` |
 | `reindex` | 重算向量 | `--force` |
 | `update-description` | 回填单文档 description | `--id` `--description` |
-| `update-links` | 提取并写入双向链接 | `--id` `--content` |
+| `recommend-api` | 按 doc 推荐相关 API（B19，替代旧 update-links） | `--doc-id` |
+| `link-auto` | 全库自动双向链接提取 | `--threshold` `--max-per-doc` |
+| `migrate-embed-model` | 迁移嵌入模型 | `[--model <name>]` |
 | `config` | 打印当前生效配置 | （无） |
+| `fetch-content` (B16) | 抓取单个 URL 的 markdown 正文 | `--url` |
+| `update-content` (B17) | 更新 doc 的 context+description+向量+hash | `--doc-id` `--description` `[--context-file]`（缺省读 stdin） |
+| `migrate-context` (B14) | 为旧文档回填 context 字段（幂等） | （无） |
+| `refresh-expired` (B18) | 列出内容已过期的文档（只列不刷） | `[--expire-days N]` |
+| `fetch-and-update` (T-verify) | 抓取正文并原子回填 context+description+向量 | `--url` `--doc-id` `[--description]`（省略则自动取首段摘要） |
 
 `--config <path>` 全局可选，覆盖默认 `config.json` 加载路径。
 
@@ -72,42 +79,33 @@ python3 -m scripts.kb.cli query \
 
 #### 命中 `needs_description=True` → 触发懒填充
 
-`description` 字段为空或为 "无描述" 时，`needs_description=True`。agent **MUST** 执行懒填充：
+`description` 字段为空或为 "无描述" 时，`needs_description=True`。agent **MUST** 执行懒填充（首选一体化动作 `fetch-and-update`，一次完成抓取+回填+重算向量）：
 
-1. 从命中文档取 `id`（即 `object_id`）与 `catalog`（或 `doc_type` 对应的 catalog）。
-2. 调 `search detail` 取正文：
+1. 从命中文档取 `id`（即 `object_id`）与 `url`。
+2. 一体化回填（抓取正文 → 写 context + description → 重算向量，fail-loud：catalog 不支持或正文为空即报错，不写半截数据）：
    ```bash
-   python3 scripts/search/detail.py <object_id> <catalog>
+   python3 -m scripts.kb.cli fetch-and-update \
+     --url <doc_url> \
+     --doc-id <id> \
+     [--description "<不超 200 字的描述>"]   # 省略则从正文首段自动生成
    ```
-3. agent 基于正文生成 **≤200 字** description。
-4. 回填并重算向量：
-   ```bash
-   python3 -m scripts.kb.cli update-description \
-     --id <id> \
-     --description "<不超 200 字的描述>"
-   ```
-   脚本自动重算向量并更新 `updated_at`。
-5. （继续）触发链接提取流程（见下文）。
+3. 若需要人工把关 description，可拆两步：`search detail` / `fetch-content` 取正文 → agent 生成 ≤200 字 → `update-content --doc-id <id> --description "<...>" --context-file <file>`。
+4. 懒填充后跑链接提取（见下文 link-auto / recommend-api）。
 
-### 2. update-links（双向链接提取）
+### 2. 链接提取（link-auto / recommend-api）
 
-agent 在 description 回填过程中已取到正文，**接着** 提取链接：
+旧 `update-links` 动作已被 `recommend-api`（单文档）与 `link-auto`（全库）替代：
 
 ```bash
-python3 -m scripts.kb.cli update-links \
-  --id <id> \
-  --content "<markdown 正文>"
+# 单文档：按 doc 推荐相关 API 链接
+python3 -m scripts.kb.cli recommend-api --doc-id <id>
+
+# 全库批量：自动双向链接提取
+python3 -m scripts.kb.cli link-auto [--threshold 0.75] [--max-per-doc 5]
 ```
 
-`--content` 也支持传文件路径（脚本检测到路径存在则读文件）。
-
-脚本行为：
-
-- 解析正文中的"相关推荐"区块。
-- 把推荐链接的 URL → id 映射。
-- **双向写入**：A 文档的 `related_ids` 加 B，B 文档的 `related_ids` 也加 A。
-
-> 🔴 **CHECKPOINT**：双向链接必须真正双向写入；不允许只写单向。
+> 🔴 **CHECKPOINT**：双向链接必须真正双向写入；不允许只写单向（`link-auto` 已保证）。
+> 旧文档缺 context 时先跑一次 `migrate-context` 回填（幂等，可重复执行）。
 
 ### 3. build（构建索引）
 
@@ -212,7 +210,7 @@ python3 -m scripts.kb.cli config
 | 触发条件 | 一线修复 | 兜底 |
 | ---- | ---- | ---- |
 | `config.json` 缺失 | agent 经 `AskUserQuestion` 询问，选默认则生成默认配置 | 用户拒绝配置则停止，提示手动编辑 `config.json` |
-| 预构建库不存在 | 调 `kb build` 从 `sidebars/` 重建 | `sidebars/` 缺失则提示用户从 `temp/` 复制 |
+| 预构建库不存在 | 调 `kb build` 从 `sidebars/` 重建 | `sidebars/` 缺失则用 `search` 子命令的 fetch-sidebars 能力从华为官方文档站重建（见 `search.md`），或向用户索取 sidebars 目录 |
 | `kb query` 无结果 | 换关键词或调 `search` 在线搜索 | `search` 也无结果则建议直访 `developer.huawei.com` |
 | ModelScope 模型下载失败 | 重试 + 镜像源配置 | 提示用户手动下载或切 `openai://` 云端模型 |
 
@@ -222,17 +220,18 @@ python3 -m scripts.kb.cli config
 | ---- | ---- |
 | `--doc-type` 非 9 类之一 | argparse 校验失败，退出码 2；提示合法值 |
 | `query` 命中但 `needs_description=True` | 必须执行 description 懒填充流程；不填充算违规 |
-| `update-links` 仅单向写 | 禁止；脚本必须双向写 `related_ids` |
+| 双向链接仅单向写 | 禁止；用 `link-auto`（内部保证双向写 `related_ids`） |
 | `merge` 后 `needs_reindex_count > 0` | 在新库跑 `reindex --force` 刷新向量 |
 | 切换模型后维度不匹配 | 同步改 `embed_dim`，再 `reindex --force` |
-| `update-description` 描述超 200 字 | agent 自我截断到 200 字内（脚本不强制，但规范要求） |
+| `update-description`/`fetch-and-update` 描述超 200 字 | agent 自我截断到 200 字内（`fetch-and-update` 自动摘要已截断保护） |
+| `fetch-and-update` 抓取失败/正文为空 | 显式报错不写半截数据；改用 `search` 在线通道或询问用户 |
 
 ## 交付核对清单
 
 ### query 流程
 - [ ] `--question` 已传；`--doc-type`（如有）属于 9 类之一
-- [ ] 命中 `needs_description=True` 文档时已执行懒填充（取正文 → 生成 ≤200 字 → update-description）
-- [ ] 懒填充后已执行 update-links 双向链接
+- [ ] 命中 `needs_description=True` 文档时已执行懒填充（首选 `fetch-and-update` 一体化，或 `update-content` 两步走）
+- [ ] 懒填充后已跑链接提取（`recommend-api` 单文档 / `link-auto` 全库）
 - [ ] ArkUI 主题查询同时参考了 `references/arkui/`
 
 ### build / reindex 流程

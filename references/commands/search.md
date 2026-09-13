@@ -163,10 +163,10 @@ flowchart TD
     S3 --> C3{content 非空?}
     C3 -->|是| S4["4. 输出 Markdown<br/>content > 3000 字: 先展示 anchors 目录<br/>用户问特定章节: 按 anchors 定位截取<br/>用户要完整文档: 直接输出 content"]
     C3 -->|否| END2["告知用户并提供 url"]
-    S4 --> S5["5. kb 协同: 回填 description + 提取链接<br/>needs_description=True → 回填 description<br/>取正文后 → update-links 双向链接"]
+    S4 --> S5["5. kb 协同: 抓取正文并回填<br/>needs_description=True → fetch-and-update 一体化回填<br/>context+description+向量"]
 ```
 
-> 文字步骤速查：1) search(keyword) 选 catalog/endpoint → 2) 展示列表让用户选 → 3) detail(object_id, catalog) 取正文 → 4) 输出 Markdown（长文档先给 anchors 目录）→ 5) kb 协同回填 description + update-links 双向链接。
+> 文字步骤速查：1) search(keyword) 选 catalog/endpoint → 2) 展示列表让用户选 → 3) detail(object_id, catalog) 取正文 → 4) 输出 Markdown（长文档先给 anchors 目录）→ 5) kb 协同回填（fetch-and-update 一体化或 update-content 两步走）+ link-auto/recommend-api 双向链接。
 
 ## 关键词选择策略
 
@@ -179,10 +179,11 @@ flowchart TD
 
 `search detail` 是 `kb` 子命令 `description` 懒填充与链接提取的**唯一合法正文来源**：
 
-- `kb query` 命中 `needs_description=True` 文档 → agent 调 `search detail <object_id> <catalog>` 取正文 → 生成 ≤200 字 description → `kb update-description` 回填。
-- 同一正文 → `kb update-links --id <id> --content "<markdown>"` 提取双向链接。
+- `kb query` 命中 `needs_description=True` 文档 → 首选一体化回填：`kb fetch-and-update --url <url> --doc-id <id>`（抓取正文 → 原子写入 context + description + 重算向量）；description 省略时自动从正文首段生成摘要。
+- 需人工把关时拆两步：`search detail <object_id> <catalog>` 取正文 → 生成 ≤200 字 description → `kb update-content --doc-id <id> --description "<...>" --context-file <file>`。
+- 链接提取用 `kb recommend-api --doc-id <id>`（单文档）或 `kb link-auto`（全库批量）。
 
-详见 [`kb.md`](kb.md) 的"懒填充流程"与"update-links"章节。
+详见 [`kb.md`](kb.md) 的"懒填充流程"与"链接提取"章节。
 
 ## 与 fix 协同
 
@@ -224,8 +225,8 @@ flowchart TD
 - [ ] 文档无硬编码 host / path
 
 ### 与 kb 协同
-- [ ] `kb query` 命中 `needs_description=True` 时已调 `search detail` 取正文
-- [ ] 取正文后已用 `kb update-description` 回填 + `kb update-links` 提取双向链接
+- [ ] `kb query` 命中 `needs_description=True` 时已取正文并回填（首选 `kb fetch-and-update` 一体化）
+- [ ] 取正文后已回填 description/context + 用 `kb recommend-api` / `kb link-auto` 提取双向链接
 
 ### 错误处理
 - [ ] 网络错误 / API 限流 / `errors` 非空时已显式上报，未静默吞错
