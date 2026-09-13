@@ -1,4 +1,4 @@
-# HAP-DEV — HarmonyOS App Development Skill
+# hap-dev — HarmonyOS App Development Skill
 
 > HarmonyOS application development skill for AI agents (HarmonyOS / ArkTS / ArkUI): 5 subcommands cover the full lifecycle from project creation → error fixing → test verification, with a local Qdrant knowledge base and online documentation search providing dual-channel knowledge support.
 

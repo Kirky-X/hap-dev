@@ -1,4 +1,4 @@
-# HAP-DEV — 鸿蒙应用开发 Skill
+# hap-dev — 鸿蒙应用开发技能
 
 [![Version](https://img.shields.io/badge/version-v0.1.2-blue?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
 
