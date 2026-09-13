@@ -34,6 +34,8 @@ bash scripts/sync-skills.sh hap-dev
 
 # 方式二：手动复制
 cp -r hap-dev/ ~/.zcode/skills/hap-dev/   # Claude Code / ZCode；Codex 为 ~/.codex/skills/
+# 方式三：远程安装（GitHub 仓库）
+npx skills add Kirky-X/hap-dev --agent claude-code -y
 ```
 
 依赖：
