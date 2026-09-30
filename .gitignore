@@ -42,8 +42,6 @@ htmlcov/
 # OpenSpec 工作流产物（设计文档，不入仓库）
 openspec/
 # 测试代码（开发期使用，不入仓库）
-tests/
-**/tests/
 **/test/
 # 例外：hap-dev scripts/test/ 是对外子命令实现路径（SKILL.md 承诺 python3 -m scripts.test.cli）
 # 实现文件入仓；scripts/test/tests/ 契约测试仍按 **/tests/ 惯例不入仓
