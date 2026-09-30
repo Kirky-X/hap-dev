@@ -198,10 +198,10 @@ python3 -m scripts.kb.cli config
 
 | 文件 | 用途 |
 | ---- | ---- |
-| `references/arkui/component-cookbook.md` | 组件 cookbook |
-| `references/arkui/api-guardrails.md` | API 使用护栏 |
-| `references/arkui/common-mistakes.md` | 常见错误 |
-| `references/arkui/ui-quality-checklist.md` | UI 质量检查清单 |
+| `../arkui/component-cookbook.md` | 组件 cookbook |
+| `../arkui/api-guardrails.md` | API 使用护栏 |
+| `../arkui/common-mistakes.md` | 常见错误 |
+| `../arkui/ui-quality-checklist.md` | UI 质量检查清单 |
 
 `kb query` 命中 ArkUI 主题文档后，agent 应**同时**查阅上述 references，避免给出与项目风格冲突的建议。
 

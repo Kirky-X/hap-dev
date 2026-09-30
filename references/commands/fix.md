@@ -29,37 +29,37 @@
 
 | 错误类别 | 描述 | 一线修复 |
 | ---- | ---- | ---- |
-| Notification API Type Errors | `ContentType` 类型不兼容 | 转为 `number` 类型 |
-| Window API Type Errors | `window.getLastWindow` 类型推断问题 | 用 callback 模式 |
+| Notification API Type Errors | `ContentType` 类型不兼容 | 转为 `number` 类型（见 `notification_errors.md`） |
+| Window API Type Errors | `window.getLastWindow` 类型推断问题 | 用 callback 模式（见 `window_type_errors.md`） |
 | AppStorage Type Errors | `AppStorage.get()` 类型推断错 | 用 `@StorageLink` + `LocalStorage` 或 `AppStorage.setAndLink`（避免 `setOrCreate`） |
 | Object Spread Type Errors | 对象展开类型推断错 | 显式为对象标注类型 |
-| @StorageLink Default Value Errors | `@StorageLink` 属性缺默认值 | 加 `= undefined` 或具体默认值 |
+| @StorageLink Default Value Errors | `@StorageLink` 属性缺默认值 | 加 `= undefined` 或具体默认值（见 `storage_link_default_errors.md`） |
 | Object Literal Interface Errors | 对象字面量无显式接口 | 用前先定义 interface |
-| Object Literal Type Errors | 对象字面量类型用在返回类型注解 | 定义 interface 作为返回类型 |
-| Function Return Type Errors | 返回类型推断受限 | 加显式返回类型注解 |
-| Arrow Function Conversion Errors | 用 function 表达式而非箭头函数 | 转 `function` 为箭头函数 `=>` |
-| Color Property Errors | 用了不存在的 `Color` 属性 | 用十六进制颜色值替代 |
-| Interface Method Signature Errors | 对象字面量方法签名不匹配 | 用属性语法 `method: () => {}` 替代方法语法 |
-| AvoidArea Type Errors | `AvoidArea` 缺 `visible` 属性 | 给 AvoidArea 对象加 `visible: false` |
-| Standalone Function `this` Errors | 独立函数里用 `this` | 把 context 作为参数传入：`function foo(context: Context)` |
-| TitleButtonRect Type Errors | `getTitleButtonRect` 返回类型错；访问不存在的 `left` / `top` | 用 `window.TitleButtonRect` 而非 `window.Rect`；只有 `width` / `height` |
-| Catch Clause Type Errors | catch 子句里写类型注解 | 删类型注解或用 `any` / `unknown` |
-| ESObject Type Errors | `ESObject` 类型受限 | 用 `ESModule` 或具体类型替代 |
-| Resource Conversion Errors | Resource 转 string / number 失败 | 在 UI 组件里直接用 Resource，或用 ResourceManager |
-| Unused Variable Warnings | 变量声明未使用 | 用 `console.info` / `hilog` 或删除 |
-| IDataSource Type Errors | `LazyForEach` 需 IDataSource 实现 | 为 LazyForEach 实现 IDataSource 接口 |
-| Duplicate Entry Errors | 同一文件多个 `@Entry` | 删除多余 `@Entry`，子组件用 `@Component` |
-| Possibly Null Errors | 访问属性时对象可能为 null | 用 `!== null` 检查或可选链 |
+| Object Literal Type Errors | 对象字面量类型用在返回类型注解 | 定义 interface 作为返回类型（见 `object_literal_type_errors.md`） |
+| Function Return Type Errors | 返回类型推断受限 | 加显式返回类型注解（见 `function_return_type_errors.md`） |
+| Arrow Function Conversion Errors | 用 function 表达式而非箭头函数 | 转 `function` 为箭头函数 `=>`（见 `arrow_function_conversion_errors.md`） |
+| Color Property Errors | 用了不存在的 `Color` 属性 | 用十六进制颜色值替代（见 `color_property_errors.md`） |
+| Interface Method Signature Errors | 对象字面量方法签名不匹配 | 用属性语法 `method: () => {}` 替代方法语法（见 `interface_method_signature_errors.md`） |
+| AvoidArea Type Errors | `AvoidArea` 缺 `visible` 属性 | 给 AvoidArea 对象加 `visible: false`（见 `avoid_area_type_errors.md`） |
+| Standalone Function `this` Errors | 独立函数里用 `this` | 把 context 作为参数传入：`function foo(context: Context)`（见 `standalone_function_errors.md`） |
+| TitleButtonRect Type Errors | `getTitleButtonRect` 返回类型错；访问不存在的 `left` / `top` | 用 `window.TitleButtonRect` 而非 `window.Rect`；只有 `width` / `height`（见 `title_button_rect_type_errors.md`） |
+| Catch Clause Type Errors | catch 子句里写类型注解 | 删类型注解或用 `any` / `unknown`（见 `catch_clause_type_errors.md`） |
+| ESObject Type Errors | `ESObject` 类型受限 | 用 `ESModule` 或具体类型替代（见 `esobject_type_errors.md`） |
+| Resource Conversion Errors | Resource 转 string / number 失败 | 在 UI 组件里直接用 Resource，或用 ResourceManager（见 `resource_conversion_errors.md`） |
+| Unused Variable Warnings | 变量声明未使用 | 用 `console.info` / `hilog` 或删除（见 `unused_variable_warnings.md`） |
+| IDataSource Type Errors | `LazyForEach` 需 IDataSource 实现 | 为 LazyForEach 实现 IDataSource 接口（见 `idata_source_errors.md`） |
+| Duplicate Entry Errors | 同一文件多个 `@Entry` | 删除多余 `@Entry`，子组件用 `@Component`（见 `duplicate_entry_errors.md`） |
+| Possibly Null Errors | 访问属性时对象可能为 null | 用 `!== null` 检查或可选链（见 `possibly_null_errors.md`） |
 | Context Type Errors | `getHostContext()` 返回 `Context \| undefined` 直接传参报类型错 | 判空收窄或 `as Context` 前置校验（见 `context_type_errors.md`） |
-| Color Consistency Errors | 硬编码颜色值触发编译警告 | 用资源引用（`$r('app.color.xxx')`）替代硬编码色值 |
-| Decorator State Errors | `@State` 等装饰器用在普通 class / `@Component` 外 | 装饰器只用于 `@Component` 修饰的 struct 内 |
+| Color Consistency Errors | 硬编码颜色值触发编译警告 | 用资源引用（`$r('app.color.xxx')`）替代硬编码色值（见 `color_consistency_errors.md`） |
+| Decorator State Errors | `@State` 等装饰器用在普通 class / `@Component` 外 | 装饰器只用于 `@Component` 修饰的 struct 内（见 `decorator_state_errors.md`） |
 | Display Listener Type Errors | `display.on/off` 监听器类型不匹配 | 按官方回调签名声明 listener（见 `display_listener_type_errors.md`） |
-| FontColor Property Errors | `fontColor` 用在容器组件上 | `fontColor` 仅限文本类组件（Text/Span/Button） |
-| Implementation Not Allowed Errors | 未用 `@Component` 装饰就编写 UI 结构 | UI 组件必须 `@Component` + `build()` 返回 UI |
+| FontColor Property Errors | `fontColor` 用在容器组件上 | `fontColor` 仅限文本类组件（Text/Span/Button）（见 `fontcolor_property_errors.md`） |
+| Implementation Not Allowed Errors | 未用 `@Component` 装饰就编写 UI 结构 | UI 组件必须 `@Component` + `build()` 返回 UI（见 `implementation_not_allowed_errors.md`） |
 | Window Rect/Size Type Errors | `window.Point` 不存在 / `Rect`、`Size` 字段误用 | 使用 `window.Rect`/`window.Size` 的真实字段（见 `window_rect_size_errors.md`） |
 | Any Type Errors | 使用 `any` / `unknown` 触发 ArkTS 限制 | 改用显式具体类型 |
-| BreakpointType Type Errors | GridRow 直接把字符串当 `BreakpointType` 用 | 使用 `BreakpointType` 枚举成员而非字符串字面量 |
-| Utility Type Errors | 使用 ArkTS 不支持的 TS 工具类型（`Partial`/`Pick` 等） | 手写显式的具体 interface / 类型别名替代（arkts-no-utility-types） |
+| BreakpointType Type Errors | GridRow 直接把字符串当 `BreakpointType` 用 | 使用 `BreakpointType` 枚举成员而非字符串字面量（见 `breakpoint_type_errors.md`） |
+| Utility Type Errors | 使用 ArkTS 不支持的 TS 工具类型（`Partial`/`Pick` 等） | 手写显式的具体 interface / 类型别名替代（arkts-no-utility-types）（见 `utility_type_errors.md`） |
 
 > 31 类对应 references 文件命名（除 `Window Rect/Size Type Errors` 用 `window_rect_size_errors.md`，其余按下划线小写约定）。完整文档：[`references/error-fixes/`](../error-fixes/)；代码示例：`references/error-fixes/assets/*.ets`。
 
@@ -244,9 +244,9 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 按需读：
 
 1. `references/grammar/topic-aliases.json` —— 主题别名映射
-2. `references/grammar/basic-syntax.md` —— ArkTS 常规写法（写代码时用）
-3. `references/grammar/restrictions.md` —— 受限语法 / 操作符 / 对象字面量规则 / `Sendable` / 审查意见（禁语法咨询时用）
-4. `references/grammar/ts-diff.md` —— TS 移植 / "为何熟悉 TS 模式在 ArkTS 不工作"（移植咨询时用）
+2. `../grammar/basic-syntax.md` —— ArkTS 常规写法（写代码时用）
+3. `../grammar/restrictions.md` —— 受限语法 / 操作符 / 对象字面量规则 / `Sendable` / 审查意见（禁语法咨询时用）
+4. `../grammar/ts-diff.md` —— TS 移植 / "为何熟悉 TS 模式在 ArkTS 不工作"（移植咨询时用）
 
 ### Source 归属
 
