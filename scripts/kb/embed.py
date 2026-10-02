@@ -86,7 +86,29 @@ class Embedder:
                 # caller asked for modelscope but the dep is missing — we still
                 # attempt a real load which will fail loudly if unreachable.
                 pass
-        return SentenceTransformer(name)
+        st = SentenceTransformer(name)
+        self._assert_cjk_representable(st)
+        return st
+
+    def _assert_cjk_representable(self, st: Any) -> None:
+        """Fail loud when the loaded tokenizer cannot represent CJK text.
+
+        English-only BERT models (e.g. paraphrase-MiniLM-L3-v2, bert-base-uncased
+        vocab) map every Chinese char to [UNK], so all same-length CJK docs
+        collapse into one vector and vector search silently degenerates. This
+        knowledge base is Chinese — require a tokenizer that encodes it.
+        """
+        tokenizer = getattr(st, "tokenizer", None)
+        unk = getattr(tokenizer, "unk_token_id", None)
+        if unk is None:
+            return  # tokenizer has no UNK concept — nothing to probe
+        ids = tokenizer("你好世界")["input_ids"]
+        if unk in ids:
+            raise ValueError(
+                f"embed model '{self.model_name}' tokenizes CJK to [UNK]; it "
+                "cannot represent this Chinese corpus. Use a multilingual model, "
+                "e.g. sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+            )
 
     def _embed_cloud(self, texts: list[str]) -> list[list[float]]:
         model = self.model_name[len(OPENAI_PREFIX):]
