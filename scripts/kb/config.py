@@ -13,7 +13,7 @@ from typing import Any, Optional
 CONFIG_FILENAME = "config.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "embed_model": "sentence-transformers/paraphrase-MiniLM-L3-v2",
+    "embed_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "embed_dim": 384,
     "embed_source": "modelscope",
     "embed_base_url": "",
