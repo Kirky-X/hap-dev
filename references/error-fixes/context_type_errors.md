@@ -115,7 +115,7 @@ struct ContextTypeExample {
 }
 ```
 
-> [查看完整示例](../assets/ContextTypeError.ets)
+> [查看完整示例](assets/ContextTypeError.ets)
 
 ## 使用场景
 

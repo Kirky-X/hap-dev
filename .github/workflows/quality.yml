@@ -1,0 +1,33 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skill-quality:
+    name: Skill quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Skill lint (frontmatter/链接/JSON/规则24)
+        run: python3 scripts/skill_lint.py .
+
+      - name: Unit tests
+        # tests/ 为 .mjs 离线冒烟，scripts/ 为 kb/search/test 三个子命令的契约测试
+        run: |
+          python3 -m pip install --quiet pytest qdrant-client rank-bm25 httpx
+          python3 -m pytest tests scripts -q

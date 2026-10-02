@@ -4,7 +4,7 @@
 
 English | [中文](README.md)
 
-[![Version](https://img.shields.io/badge/version-v0.1.2-blue?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
+[![Version](https://img.shields.io/github/v/release/Kirky-X/hap-dev?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
 
 ## ✨ Features
 
@@ -16,7 +16,7 @@ English | [中文](README.md)
 | `kb` | Local Qdrant knowledge base: vector + BM25 hybrid retrieval | **14 sub-actions** (query/build/merge/reindex/…/config) |
 | `search` | Dual-endpoint online documentation search + detail HTML→Markdown | developer / device endpoints with multi-catalog routing |
 
-- **Pre-built knowledge base, out of the box**: `data/harmonyos.qdrant/` (measured: 967 documents, 384 dimensions, ~4.6 MB); default embedding model `paraphrase-MiniLM-L3-v2`, switchable to ModelScope or cloud `openai://` models
+- **Pre-built knowledge base, out of the box**: `data/harmonyos.qdrant/` (measured: 967 documents, 384 dimensions, ~4.6 MB); default embedding model `paraphrase-multilingual-MiniLM-L12-v2`, switchable to ModelScope or cloud `openai://` models
 - **Subcommand routing**: `SKILL.md` is the single router; each subcommand's complete workflow lives in `references/commands/{create,fix,test,kb,search}.md`
 
 ```mermaid
@@ -29,7 +29,7 @@ flowchart LR
 ## 📦 Installation
 
 ```bash
-# 方式一：从工作区同步部署（推荐）
+# 方式一：从 skills 工作区同步部署（脚本在工作区根 scripts/ 下，仅工作区开发者可用）
 bash scripts/sync-skills.sh hap-dev
 
 # 方式二：手动复制
@@ -93,10 +93,10 @@ hap-dev/
 ├── references/
 │   ├── commands/                   # create/fix/test/kb/search 流程文档
 │   ├── error-fixes/                # 31 类 ArkTS 编译错误修复文档
-│   ├── runtime-fix/                # JSCrash 诊断说明 + evals
+│   ├── runtime-fix/                # evals 评测样例（JSCrash 诊断流程在 commands/fix.md 轨道二）
 │   ├── grammar/                    # ArkTS 语法规范 + TS 差异
 │   ├── arkui/                      # ArkUI cookbook + 检查清单
-│   ├── dev-rules.md                # 71 条语法 + 10 条 API + 4 条动画强制规则
+│   ├── dev-rules.md                # 67 条语法 + 10 条 API + 4 条动画强制规则
 │   └── project-template/application/  # 完整 ArkTS 工程模板
 └── scripts/
     ├── create/                     # copy-template.mjs + detect-sdk.mjs
@@ -120,5 +120,5 @@ In addition: the `test` emulator tooling is available only on Windows/macOS; hdc
 ## 📄 License & Attribution
 
 - License: MIT, see [LICENSE](LICENSE)
-- Repository: <https://github.com/Kirky-X/hap-dev> (version follows the git tag; currently v0.1.2)
+- Repository: <https://github.com/Kirky-X/hap-dev> (version follows the git tag)
 - Developed with OpenSpec spec-driven development; changes are recorded in `openspec/changes/`

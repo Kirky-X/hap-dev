@@ -145,5 +145,5 @@ struct DisplayListenerExample {
 ```
 
 ### Related Files
-- [Code Example](../assets/DisplayListenerTypeError.ets)
+- [Code Example](assets/DisplayListenerTypeError.ets)
 - [Display API Documentation](https://developer.huawei.com/consumer/cn/doc/harmonyos-references/js-apis-display)

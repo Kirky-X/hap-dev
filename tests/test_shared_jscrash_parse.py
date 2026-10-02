@@ -21,6 +21,19 @@ TypeError: Cannot read property 'name' of undefined
 
 PLAIN_TEXT = "hello world nothing special here"
 
+# 标准 faultlogger 形态：Reason → Error name → Error message 固定行序，
+# Error name 与 Error message 两行都命中 CRASH_SIGNAL_RE
+FAULTLOGGER_LOG = """Pid: 12345
+Uid: 20020123
+Process name: com.example.testapp
+Reason: TypeError
+Error name: TypeError
+Error message: Cannot read property 'width' of null
+Stacktrace:
+    at onPageShow (entry/src/main/ets/pages/Index.ets:25:5)
+    at anonymous (entry/src/main/ets/pages/Index.ets:12:1)
+"""
+
 MODULE = "fix/shared/jscrash-parse.mjs"
 
 
@@ -71,6 +84,12 @@ class TestBuildCrashReport(unittest.TestCase):
         self.assertEqual(report["status"], "no_crash_signature")
         self.assertEqual(report["errorType"], "UnknownError")
         self.assertEqual(report["suspectedFile"], "(not found)")
+
+    def test_faultlogger_error_message_takes_body_line(self):
+        report = build_report(FAULTLOGGER_LOG)
+        self.assertEqual(report["status"], "detected")
+        # error_message 必须取真正的消息正文行，而非其前的 Error name 行
+        self.assertEqual(report["errorMessage"], "Cannot read property 'width' of null")
 
     def test_device_and_source_fields(self):
         report = build_report(CRASH_LOG, source="file", device="emulator-9100")

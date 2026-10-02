@@ -101,9 +101,9 @@ struct AdaptiveLayout {
 
 ## 详细代码示例
 
-> [DecoratorStateError.ets](../assets/DecoratorStateError.ets) - 完整的 @State 装饰器错误示例和修复方案
+> [DecoratorStateError.ets](assets/DecoratorStateError.ets) - 完整的 @State 装饰器错误示例和修复方案
 
 ## 相关文档
 
-- [ArkTS 状态管理](./state_migration.md)
+- [ArkUI 组件与状态刷新示例](../arkui/component-cookbook.md)
 - [HarmonyOS 官方文档](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkts-state-management-overview)

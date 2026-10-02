@@ -15,7 +15,7 @@ metadata:
 - **create**（上游）— 基于 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程，模板复制 + SDK 自动探测 + bundleName 派生 + main_pages.json/EntryAbility 同步。解决"工程**怎么起**"。
 - **fix**（修复）— 聚合三套修复轨道：编译错误（31 类 error-fixes references）、运行时 JSCrash（5 个 Node 脚本 + faultlogger/hilog 证据链）、语法规范（grammar references）。按症状路由。解决"**错了怎么改**"。
 - **test**（验证）— 平台检测 + 条件启用 DevEco MCP（@deveco-codegenie/mcp）。Linux 静态检查（check_ets_files/build_project）；Windows/macOS 模拟器全功能（start_app/UI 树/UI 操作/hilog/verify_ui 自然语言用例）。解决"**对不对**"。
-- **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `paraphrase-MiniLM-L3-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接 + context 网页内容缓存。子动作（14 个）：query/build/merge/reindex/update-description/recommend-api/fetch-content/fetch-and-update/update-content/migrate-context/refresh-expired/link-auto/migrate-embed-model/config。解决"**本地能查什么**"。
+- **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `paraphrase-multilingual-MiniLM-L12-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接 + context 网页内容缓存。子动作（14 个）：query/build/merge/reindex/update-description/recommend-api/fetch-content/fetch-and-update/update-content/migrate-context/refresh-expired/link-auto/migrate-embed-model/config。解决"**本地能查什么**"。
 - **search**（在线搜索）— 双端点（developer.huawei.com + device.harmonyos.com）多 catalog 路由，HTML→Markdown 清洗。作为 kb description/链接填充的合法通道之一。解决"**网上有什么**"。
 
 ## 子命令路由
@@ -109,7 +109,7 @@ cd {SKILL_DIR} && python3 scripts/kb/build_db.py
 ### 开发规则（ArkTS / API / ArkUI 动画）
 
 `create` 子命令生成工程代码、`fix` 子命令的 grammar 轨道、`test` 的 `check_ets_files` 都 MUST 遵循 [`references/dev-rules.md`](references/dev-rules.md)。该文件包含三类强制规则：
-1. **ArkTS / ets 语法约束**（71 条，违反 → 编译失败）
+1. **ArkTS / ets 语法约束**（67 条，违反 → 编译失败）
 2. **HarmonyOS API 使用规范**（10 条必读）
 3. **ArkUI 动画规范**（4 条，`animateTo` / `transform` / `renderGroup` / `opacity`）
 
@@ -178,7 +178,7 @@ flowchart LR
 2. **禁止跨子命令直连** — create 产出的工程不经 fix/test 验证不算完成；kb 的 description 回填不调 search detail 算违规。
 3. **禁止简化实现** — 双向链接必须真正双向写入；description 回填必须重算向量；合并必须字段级 update_at 比较。
 4. **禁止静默吞错** — 所有脚本错误显式上报（非零退出码/errors 字段/异常），不藏默认值背后。
-5. **禁止跨模型向量空间混用** — 同维度不同 embed_model 的向量空间不兼容（如 384 维 paraphrase-MiniLM-L3-v2 vs all-MiniLM-L6-v2 余弦相似度无意义）。query/merge/reindex 入口 MUST 校验 embed_model 一致；mismatch 时 fail-loud，禁止"维度相同就放过"。新库 MUST 跑 `migrate-embed-model` 回填 embed_model 字段；老库迁移完成后 MUST 跑 `link-auto` 建立默认双向链接。
+5. **禁止跨模型向量空间混用** — 同维度不同 embed_model 的向量空间不兼容（如 384 维 paraphrase-multilingual-MiniLM-L12-v2 vs all-MiniLM-L6-v2 余弦相似度无意义）。query/merge/reindex 入口 MUST 校验 embed_model 一致；mismatch 时 fail-loud，禁止"维度相同就放过"。新库 MUST 跑 `migrate-embed-model` 回填 embed_model 字段；老库迁移完成后 MUST 跑 `link-auto` 建立默认双向链接。
 6. **禁止跳过 `migrate-context` 直接 query** — legacy 库（B14 前）docs 缺 `context` 字段，BM25 索引优先用 context（信息丰富），字段缺失会让 BM25 退化为只匹配 title/description（关键词召回质量下降）。新库或迁移后 MUST 跑 `python3 -m scripts.kb.cli migrate-context` 回填 `context=""`（幂等：用 `iter_raw_payloads` 区分"字段缺失"和"字段为空"，避免重复迁移）。
 
 ## 平台支持矩阵

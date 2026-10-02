@@ -117,7 +117,7 @@ struct ColorConsistencyExample {
 }
 ```
 
-> [查看完整示例](../assets/ColorConsistencyError.ets)
+> [查看完整示例](assets/ColorConsistencyError.ets)
 
 ## 自定义颜色资源
 

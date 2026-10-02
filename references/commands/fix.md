@@ -8,7 +8,7 @@
 
 | 用户症状 | 路由轨道 | 入口 |
 | ---- | ---- | ---- |
-| 有 build / 编译失败日志或类型错误，**无** jscrash / stack | error-fixes | [`references/error-fixes/`](../error-fixes/) 21 类 + `assets/*.ets` |
+| 有 build / 编译失败日志或类型错误，**无** jscrash / stack | error-fixes | [`references/error-fixes/`](../error-fixes/) 31 类 + `assets/*.ets` |
 | 有 jscrash / stack / faultlog / 白屏 / 闪退，**或** build 成功但运行即崩 | runtime-fix | `scripts/fix/*.mjs`（5 脚本） |
 | 纯语法咨询 / TS→ArkTS 差异 / "某语法是否允许" | grammar | [`references/grammar/`](../grammar/) |
 | 症状不明 | fallback：error-fixes → runtime-fix → grammar | 见下文"症状歧义处理" |
@@ -25,7 +25,7 @@
 
 ### Error Categories 快速参考表
 
-下表列出 21 类常见编译错误及一线修复方向，每类对应 `references/error-fixes/<category>.md` 与 `assets/<Name>.ets`。
+下表列出 31 类常见编译错误及一线修复方向，每类对应 `references/error-fixes/<category>.md` 与 `assets/<Name>.ets`。
 
 | 错误类别 | 描述 | 一线修复 |
 | ---- | ---- | ---- |
@@ -75,7 +75,7 @@
 
 | 情形 | 处理 |
 | ---- | ---- |
-| 错误不在 21 类内 | 经 `search` 子命令在线查官方文档；找不到则 fallback 到 grammar 轨道审查语法 |
+| 错误不在 31 类内 | 经 `search` 子命令在线查官方文档；找不到则 fallback 到 grammar 轨道审查语法 |
 | 错误同时涉及多个类别 | 逐类修复，先修最先报的错；每次修后重新跑 build |
 | 涉及未知 `@ohos.*` / `@kit.*` API | 调 `search` 查 API 约束，**不** 凭模型记忆瞎改 |
 
@@ -134,7 +134,7 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 1. **读 `AppScope/app.json5`** 取 `app.bundleName` 精确值作为 `{bundleName}`，禁止猜测。
 2. 解析目标设备：
    - 用户提供 `deviceId` → 后续设备命令全部用它。
-   - 未提供 → 先 `hdc_log(action="list_devices")`。
+   - 未提供 → 先运行 `hdc list targets` 获取在线设备序列号（hdc 不可用时按降级模式处理，请用户提供本地崩溃日志）。
    - 仅 1 台设备 → 用之。
    - 多台设备 → 经 `AskUserQuestion` 让用户选，**禁止** 在用户选定前 probe faultlogger / fetch faultlog / collect hilog。
    - 0 台设备 → 报告无法采集设备证据，请求用户提供已连接设备或本地崩溃日志。
@@ -293,7 +293,7 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 ## 交付核对清单
 
 ### error-fixes 轨道
-- [ ] 编译错误原文已收集；错误类别已在 21 类表内定位（或确认表外并调 search）
+- [ ] 编译错误原文已收集；错误类别已在 31 类表内定位（或确认表外并调 search）
 - [ ] 读过对应 `references/error-fixes/<category>.md` + `assets/*.ets`；修改最小化，不重构无关代码；修改后 `build_project` 通过
 
 ### runtime-fix 轨道

@@ -286,5 +286,5 @@ class ArrayUtils {
 5. **Use Object[]**: Use `Object[]` for rest parameters
 
 ### Related Files
-- [Code Example](../assets/UtilityTypeError.ets)
+- [Code Example](assets/UtilityTypeError.ets)
 - [ArkTS Type System](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkts-type-system)

@@ -29,6 +29,6 @@ Use explicit type definitions, interfaces, type aliases, union types, or generic
 6. **Avoid any**: Never use `any` or `unknown` types
 
 ### Related Files
-- [Code Example](../assets/AnyTypeError.ets)
+- [Code Example](assets/AnyTypeError.ets)
 - [ArkTS Type System](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkts-type-system)
 - 详细代码示例见 [any-type-examples.md](./any-type-examples.md)

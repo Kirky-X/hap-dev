@@ -92,4 +92,4 @@ if (err.code === 1300001) {
 5. **Handle window state**: Account for window resize and orientation changes
 
 ### Related Files
-- [Code Example](../assets/WindowTypeError.ets)
+- [Code Example](assets/WindowTypeError.ets)

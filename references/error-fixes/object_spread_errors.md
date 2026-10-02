@@ -101,5 +101,5 @@ const result: Result = {
 5. **Avoid deep spread**: Be careful with nested object spreads
 
 ### Related Files
-- [Code Example](../assets/ObjectSpreadError.ets)
+- [Code Example](assets/ObjectSpreadError.ets)
 - [ArkTS Language Guide](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkts-get-started)

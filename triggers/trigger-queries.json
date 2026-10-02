@@ -1,0 +1,132 @@
+{
+  "skill": "hap-dev",
+  "queries": [
+    {
+      "q": "帮我创建一个鸿蒙工程，应用名叫 Weather",
+      "expect": "trigger"
+    },
+    {
+      "q": "ArkTS 编译报 Object literal must correspond to some explicitly declared class or interface，怎么修",
+      "expect": "trigger"
+    },
+    {
+      "q": "ArkTS 里不能用 any，我这个变量类型该怎么声明",
+      "expect": "trigger"
+    },
+    {
+      "q": "DevEco 的模拟器起不来，一直卡在黑屏怎么排查",
+      "expect": "trigger"
+    },
+    {
+      "q": "应用闪退了，faultlogger 里有个 jscrash 日志，帮我分析下",
+      "expect": "trigger"
+    },
+    {
+      "q": "hvigor 打包失败，报 OhosBundleTask 异常，日志贴给你",
+      "expect": "trigger"
+    },
+    {
+      "q": "hdc list targets 是空的，设备连不上怎么办",
+      "expect": "trigger"
+    },
+    {
+      "q": "Stage 模型和 FA 模型有什么区别？新工程该用哪个",
+      "expect": "trigger"
+    },
+    {
+      "q": "元服务和普通 HAP 应用有什么区别？Atomic Service 的包名有什么约束",
+      "expect": "trigger"
+    },
+    {
+      "q": "ArkUI 的 List 组件怎么实现下拉刷新",
+      "expect": "trigger"
+    },
+    {
+      "q": "在鸿蒙知识库里搜一下 Navigation 路由的文档",
+      "expect": "trigger"
+    },
+    {
+      "q": "在线查一下 @ohos.net.http 的 API 参考",
+      "expect": "trigger"
+    },
+    {
+      "q": "HAP 构建出来的包装不上，提示签名错误",
+      "expect": "trigger"
+    },
+    {
+      "q": "HarmonyOS NEXT 上怎么申请位置权限",
+      "expect": "trigger"
+    },
+    {
+      "q": "鸿蒙 ArkTS 里 UIAbility 的生命周期怎么管理",
+      "expect": "trigger",
+      "mirror": "flutter-dev"
+    },
+    {
+      "q": "DevEco Studio 编译报 hvigor 错误，怎么排查",
+      "expect": "trigger",
+      "mirror": "flutter-dev"
+    },
+    {
+      "q": "HarmonyOS 元服务的 HAP 包安装失败，提示解析错误",
+      "expect": "trigger",
+      "mirror": "flutter-dev"
+    },
+    {
+      "q": "ArkUI 的 @State 装饰器和 Flutter 的 setState 有什么区别",
+      "expect": "trigger",
+      "mirror": "flutter-dev"
+    },
+    {
+      "q": "Flutter 页面列表滑动卡顿，帮我优化一下",
+      "expect": "no",
+      "owner": "flutter-dev"
+    },
+    {
+      "q": "Dart 的 Future await 之后一直没回调",
+      "expect": "no",
+      "owner": "flutter-dev"
+    },
+    {
+      "q": "Element Plus 的 ElTable 自定义列怎么写",
+      "expect": "no",
+      "owner": "element-dev"
+    },
+    {
+      "q": "Vue 3 里 ref 和 reactive 怎么选",
+      "expect": "no",
+      "owner": "none",
+      "note": "纯 Vue 框架 API 问题：element-dev 仅接 Element Plus 组件文档查询（KB 99 篇均为 element-plus.org 站点文档，无 Vue 响应式内容），两侧统一 owner=none，归通用 Vue 知识"
+    },
+    {
+      "q": "把这张设计稿转成 HarmonyOS 页面代码，要能直接跑",
+      "expect": "no",
+      "owner": "maliang"
+    },
+    {
+      "q": "鸿蒙 App 的图标用 SymbolGlyph 还是 sys.symbol",
+      "expect": "no",
+      "owner": "xizhi"
+    },
+    {
+      "q": "帮我 review 这个鸿蒙项目的代码质量",
+      "expect": "no",
+      "owner": "diting"
+    },
+    {
+      "q": "扫描这个 ArkTS 工程有没有硬编码密钥和注入漏洞",
+      "expect": "no",
+      "owner": "tiangang"
+    },
+    {
+      "q": "鸿蒙应用上架应用市场要准备哪些材料",
+      "expect": "trigger",
+      "note": "原标负例 owner=none；Tier3 实测真实路由判 hap-dev，且华为官方文档（含上架指南）在本 skill 文档搜索能力圈内，升级为正例"
+    },
+    {
+      "q": "用 Python 解析 .hap 安装包的 zip 目录结构",
+      "expect": "no",
+      "owner": "none"
+    }
+  ]
+}

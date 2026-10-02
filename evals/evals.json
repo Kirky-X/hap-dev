@@ -1,0 +1,114 @@
+{
+  "skill_name": "hap-dev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我创建一个鸿蒙工程，应用名叫 Weather",
+      "expected_output": "路由到 create 子命令：appName=Weather 合法直接执行，bundleName 自动派生 com.example.weather，调 node scripts/create/copy-template.mjs 创建工程；apiLevel 未指定时省略 --api-level 由脚本探测，不凭模型猜版本",
+      "assertions": [
+        "调用 scripts/create/copy-template.mjs 而非手动逐文件复制模板",
+        "脚本非零退出码时停止并报告，不继续后续步骤"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "ArkTS 编译报 Object literal must correspond to some explicitly declared class or interface，怎么修",
+      "expected_output": "走 fix 子命令 error-fixes 轨道：对照 references/commands/fix.md 错误类别表定位 object_literal 类别（表内数字应为 31 类），读对应 references/error-fixes/<category>.md 与 assets/*.ets，按一线修复方向最小化修改",
+      "assertions": [
+        "读取对应 error-fixes 类别文档后再改，不凭模型记忆直接改",
+        "修改最小化，不重构无关代码"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "应用闪退了，faultlogger 里有个 jscrash 日志，帮我分析下",
+      "expected_output": "走 fix 子命令 runtime-fix 轨道：从 AppScope/app.json5 读 bundleName（禁止猜测），用户提供日志则跑 scripts/fix/jscrash-report.mjs 或 parse-jscrash-log.mjs 解析锚点；拿到 status: detected 锚点前不大规模读工程代码",
+      "assertions": [
+        "bundleName 从 AppScope/app.json5 读取",
+        "status: no_crash_signature 时不进入大规模代码阅读"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "在鸿蒙知识库里搜一下 Navigation 路由的文档",
+      "expected_output": "路由到 kb 子命令：python3 -m scripts.kb.cli query --question \"Navigation\"（默认 top-5）；命中 needs_description=True 时执行懒填充（首选 fetch-and-update 一体化回填），ArkUI 主题同时参考 references/arkui/",
+      "assertions": [
+        "命中无 description 文档时执行懒填充流程而非直接凭记忆回答",
+        "ArkUI 主题查询同时查阅 references/arkui/"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "鸿蒙 ArkTS 里 UIAbility 的生命周期怎么管理",
+      "expected_output": "本 skill 接管（镜像正例，flutter-dev 侧登记为让渡负例）：Stage 模型生命周期属鸿蒙开发域，经 kb query / search 查文档后回答",
+      "assertions": [
+        "不调用 flutter-dev 的任何流程处理该 query"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "ArkUI 的 @State 装饰器和 Flutter 的 setState 有什么区别",
+      "expected_output": "本 skill 接管（镜像正例，flutter-dev 侧登记为让渡负例）：提问主体是 ArkUI 状态管理装饰器，鸿蒙域优先；对比部分可查 arkui 文档后回答"
+    },
+    {
+      "id": 7,
+      "prompt": "Flutter 页面列表滑动卡顿，帮我优化一下",
+      "expected_output": "让渡给 flutter-dev（Flutter/Dart 域，SKILL.md description 明确 Do NOT trigger），本 skill 不接",
+      "assertions": [
+        "不调用本 skill 的任何子命令处理该 query"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Dart 的 Future await 之后一直没回调",
+      "expected_output": "让渡给 flutter-dev（Dart 语言/异步域），本 skill 不接"
+    },
+    {
+      "id": 9,
+      "prompt": "Element Plus 的 ElTable 自定义列怎么写",
+      "expected_output": "让渡给 element-dev（Element Plus 组件文档域），本 skill 不接"
+    },
+    {
+      "id": 10,
+      "prompt": "Vue 3 里 ref 和 reactive 怎么选",
+      "expected_output": "不触发 hap-dev；也不让渡给 element-dev（其边界是 Element Plus 组件文档查询，纯 Vue 框架 API 它接不住，两侧 triggers 已统一 owner=none），由通用 Vue 知识回答"
+    },
+    {
+      "id": 11,
+      "prompt": "把这张设计稿转成 HarmonyOS 页面代码，要能直接跑",
+      "expected_output": "让渡给 maliang（设计稿→代码生成属设计域，maliang 触发词含『转 HarmonyOS』）；转出的鸿蒙代码编译报错、工程创建、构建运行等开发侧问题才回 hap-dev",
+      "assertions": [
+        "不把设计→代码生成当开发任务接走",
+        "转出产物后续报错诊断时正常走 fix 轨道"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "鸿蒙 App 的图标用 SymbolGlyph 还是 sys.symbol",
+      "expected_output": "让渡给 xizhi（图标选型/图标库路由域，xizhi 触发词含鸿蒙图标/HarmonyOS icon/SymbolGlyph/sys.symbol），本 skill 不接",
+      "assertions": [
+        "不因 query 含『鸿蒙 App』字面而抢接图标选型问题"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "帮我 review 这个鸿蒙项目的代码质量",
+      "expected_output": "让渡给 diting（代码质量审查域）；鸿蒙只是被审对象的语言/平台，审查方法论归 diting，本 skill 不接"
+    },
+    {
+      "id": 14,
+      "prompt": "扫描这个 ArkTS 工程有没有硬编码密钥和注入漏洞",
+      "expected_output": "让渡给 tiangang（SAST 安全扫描域）；ArkTS 只是扫描对象，本 skill 不接"
+    },
+    {
+      "id": 15,
+      "prompt": "鸿蒙应用上架应用市场要准备哪些材料",
+      "expected_output": "触发 hap-dev：用文档搜索/知识库查华为官方上架指南与材料清单（Tier3 实测真实路由亦判 hap-dev，原负例标注过严已改正例）"
+    },
+    {
+      "id": 16,
+      "prompt": "用 Python 解析 .hap 安装包的 zip 目录结构",
+      "expected_output": "不触发（共享词面 HAP 但语义是 Python 脚本任务，非鸿蒙开发），直接处理"
+    }
+  ]
+}

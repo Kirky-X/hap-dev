@@ -1,6 +1,6 @@
 # hap-dev — 鸿蒙应用开发技能
 
-[![Version](https://img.shields.io/badge/version-v0.1.2-blue?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
+[![Version](https://img.shields.io/github/v/release/Kirky-X/hap-dev?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
 
 中文 | [English](README_EN.md)
 
@@ -16,7 +16,7 @@
 | `kb` | 本地 Qdrant 知识库：向量 + BM25 混合检索 | **14 个子动作**（query/build/merge/reindex/…/config） |
 | `search` | 双端点在线文档搜索 + 详情 HTML→Markdown | developer / device 端点多 catalog 路由 |
 
-- **预构建知识库开箱即用**：`data/harmonyos.qdrant/`（实测 967 条文档、384 维、约 4.6 MB），默认嵌入模型 `paraphrase-MiniLM-L3-v2`，可切换 ModelScope / 云端 `openai://` 模型
+- **预构建知识库开箱即用**：`data/harmonyos.qdrant/`（实测 967 条文档、384 维、约 4.6 MB），默认嵌入模型 `paraphrase-multilingual-MiniLM-L12-v2`，可切换 ModelScope / 云端 `openai://` 模型
 - **子命令路由**：`SKILL.md` 是唯一路由器，各子命令完整流程在 `references/commands/{create,fix,test,kb,search}.md`
 
 ```mermaid
@@ -29,7 +29,7 @@ flowchart LR
 ## 📦 安装
 
 ```bash
-# 方式一：从工作区同步部署（推荐）
+# 方式一：从 skills 工作区同步部署（脚本在工作区根 scripts/ 下，仅工作区开发者可用）
 bash scripts/sync-skills.sh hap-dev
 
 # 方式二：手动复制
@@ -93,10 +93,10 @@ hap-dev/
 ├── references/
 │   ├── commands/                   # create/fix/test/kb/search 流程文档
 │   ├── error-fixes/                # 31 类 ArkTS 编译错误修复文档
-│   ├── runtime-fix/                # JSCrash 诊断说明 + evals
+│   ├── runtime-fix/                # evals 评测样例（JSCrash 诊断流程在 commands/fix.md 轨道二）
 │   ├── grammar/                    # ArkTS 语法规范 + TS 差异
 │   ├── arkui/                      # ArkUI cookbook + 检查清单
-│   ├── dev-rules.md                # 71 条语法 + 10 条 API + 4 条动画强制规则
+│   ├── dev-rules.md                # 67 条语法 + 10 条 API + 4 条动画强制规则
 │   └── project-template/application/  # 完整 ArkTS 工程模板
 └── scripts/
     ├── create/                     # copy-template.mjs + detect-sdk.mjs
@@ -120,5 +120,5 @@ hap-dev/
 ## 📄 License 与归属
 
 - License：MIT，见 [LICENSE](LICENSE)
-- 仓库：<https://github.com/Kirky-X/hap-dev>（版本以 git tag 为准，当前 v0.1.2）
+- 仓库：<https://github.com/Kirky-X/hap-dev>（版本以 git tag 为准）
 - 使用 OpenSpec 规格驱动开发，变更记录在 `openspec/changes/`

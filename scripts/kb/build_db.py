@@ -10,13 +10,13 @@ result (per-doc-type counts, total vectors, on-disk size of the DB).
 
 This is the script users invoke to (re)generate the prebuilt
 ``data/harmonyos.qdrant`` shipped with the skill. The default config uses
-``sentence-transformers/paraphrase-MiniLM-L3-v2`` via ModelScope; switching
+``sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`` via ModelScope; switching
 ``embed_model`` in ``config.json`` then re-running this script refreshes all
 vectors (see also ``reindex.py`` for hash-delta re-embedding).
 
-Note: the user's original spec named the model ``paraphrase-MiniLM-L3-v2+``
+Note: the user's original spec named the model ``paraphrase-multilingual-MiniLM-L12-v2+``
 (with a trailing ``+``), but that suffix is invalid for both HuggingFace repo
-ids and ModelScope — the actual published model is ``paraphrase-MiniLM-L3-v2``
+ids and ModelScope — the actual published model is ``paraphrase-multilingual-MiniLM-L12-v2``
 (no ``+``). ``config.json`` and ``DEFAULT_CONFIG`` use the correct name.
 
 The script reuses ``cli.make_embedder`` / ``cli.make_indexer`` /

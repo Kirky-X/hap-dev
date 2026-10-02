@@ -41,10 +41,12 @@ data/harmonyos.qdrant/.lock
 htmlcov/
 # OpenSpec 工作流产物（设计文档，不入仓库）
 openspec/
-# 测试代码（开发期使用，不入仓库）
+# 运行日志残留（不入仓库）
+logs/
+# 测试目录：**/test/ 仅拦截名为 test 的目录（历史产物）；tests/ 契约测试
+# （scripts/*/tests/ 与顶层 tests/）有意入仓（commit ef14f07 un-ignore tests）。
+# scripts/test/ 是对外子命令实现路径（SKILL.md 承诺 python3 -m scripts.test.cli），同样入仓
 **/test/
-# 例外：hap-dev scripts/test/ 是对外子命令实现路径（SKILL.md 承诺 python3 -m scripts.test.cli）
-# 实现文件入仓；scripts/test/tests/ 契约测试仍按 **/tests/ 惯例不入仓
 !scripts/test/
 !scripts/test/*
 # Darwin skill 优化产物（开发期使用，不入仓库）

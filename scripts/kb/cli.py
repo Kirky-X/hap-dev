@@ -6,7 +6,7 @@ Usage:
 Actions:
     query                --question --top-k --doc-type --rerank
     build                --sidebars-dir
-    merge                --db-a --db-b --out
+    merge                --db-a --db-b --out | --confirm-delete <backup>
     reindex              --force
     update-description   --id --description
     recommend-api        --doc-id                    (B19, 替代旧 update-links)
@@ -43,7 +43,7 @@ from scripts.kb.embed import Embedder
 from scripts.kb.indexer import QdrantIndexer
 from scripts.kb.links import update_links
 from scripts.kb.links_auto import auto_link
-from scripts.kb.merge import merge as do_merge
+from scripts.kb.merge import confirm_delete, merge as do_merge
 from scripts.kb.query import query as do_query
 from scripts.kb.reindex import reindex as do_reindex
 from scripts.kb.sidebar_parser import parse_all_sidebars
@@ -116,10 +116,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="override sidebars_dir from config")
     b.add_argument("--config", default=None)
 
-    m = sub.add_parser("merge", help="merge two DBs into a new one")
-    m.add_argument("--db-a", required=True)
-    m.add_argument("--db-b", required=True)
-    m.add_argument("--out", required=True)
+    m = sub.add_parser("merge",
+                       help="merge two DBs into a new one, or delete a verified backup")
+    m.add_argument("--db-a", default=None)
+    m.add_argument("--db-b", default=None)
+    m.add_argument("--out", default=None)
+    m.add_argument("--confirm-delete", default=None, metavar="BACKUP_PATH",
+                   help="delete a merge backup after the user verified the new DB "
+                        "(mutually exclusive with --db-a/--db-b/--out)")
     m.add_argument("--config", default=None)
 
     r = sub.add_parser("reindex", help="recompute embeddings")
@@ -231,6 +235,20 @@ def _run_build(args: argparse.Namespace) -> Any:
 
 
 def _run_merge(args: argparse.Namespace) -> Any:
+    # 删备份模式：与合并模式互斥（merge.py confirm_delete 对缺失路径 fail-loud）
+    if args.confirm_delete:
+        confirm_delete(args.confirm_delete)
+        out = {"deleted": args.confirm_delete}
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return out
+    missing = [flag for flag, val in
+               (("--db-a", args.db_a), ("--db-b", args.db_b), ("--out", args.out))
+               if not val]
+    if missing:
+        raise SystemExit(
+            f"scripts.kb.cli merge: error: the following arguments are required: "
+            f"{', '.join(missing)} — or pass --confirm-delete <backup_path>"
+        )
     cfg = _load_cfg(args.config)
     res = do_merge(args.db_a, args.db_b, args.out, cfg["collection"],
                    dim=cfg.get("embed_dim", 384))

@@ -209,6 +209,17 @@ function findCrashSignal(lines, start, end, step) {
 
 function detectErrorMessage(lines, anchor) {
   if (anchor >= 0) {
+    // 标准 faultlogger 日志固定为 Reason → Error name → Error message 行序，
+    // 且 Error name / Error message 两行都命中 CRASH_SIGNAL_RE——不前置
+    // 捕获 Error message 行的话，forwardMatch 会永远停在 Error name 行上，
+    // 真正的消息正文（如 "Cannot read property x of null"）被丢弃。
+    for (let index = anchor; index < Math.min(lines.length, anchor + 6); index += 1) {
+      const match = /^Error message:\s*(.+)$/i.exec(lines[index].trim());
+      if (match && match[1].trim()) {
+        return match[1].trim();
+      }
+    }
+
     const forwardMatch = findCrashSignal(lines, anchor, Math.min(lines.length, anchor + 6), 1);
     if (forwardMatch) {
       return forwardMatch;

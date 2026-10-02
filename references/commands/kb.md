@@ -1,6 +1,6 @@
 # kb 子命令 —— 本地 Qdrant 知识库
 
-本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `sentence-transformers/paraphrase-MiniLM-L3-v2+`，可切 ModelScope / 云端 OpenAI）+ bm25 关键词索引 + 可选 FlashRank 重排。`description` 懒填充 + 向量回填 + 双向链接。
+本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，可切 ModelScope / 云端 OpenAI）+ bm25 关键词索引 + 可选 FlashRank 重排。`description` 懒填充 + 向量回填 + 双向链接。
 
 > 🔴 **CHECKPOINT**：所有路径 / 模型名 / 端点都从 `config.json` 读，禁止硬编码（参见"禁止事项 #2"）。
 
@@ -47,7 +47,7 @@
 
 | 字段 | 默认值 | 说明 |
 | ---- | ---- | ---- |
-| `embed_model` | `sentence-transformers/paraphrase-MiniLM-L3-v2+` | 嵌入模型；`openai://` 前缀走云端 |
+| `embed_model` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | 嵌入模型；`openai://` 前缀走云端 |
 | `embed_dim` | `384` | 嵌入维度 |
 | `embed_source` | `modelscope` | 模型来源（`modelscope` / `local` / `openai`） |
 | `embed_base_url` | `""` | 云端嵌入 API base URL |
@@ -101,7 +101,7 @@ python3 -m scripts.kb.cli query \
 python3 -m scripts.kb.cli recommend-api --doc-id <id>
 
 # 全库批量：自动双向链接提取
-python3 -m scripts.kb.cli link-auto [--threshold 0.75] [--max-per-doc 5]
+python3 -m scripts.kb.cli link-auto [--threshold 0.9] [--max-per-doc 10]
 ```
 
 > 🔴 **CHECKPOINT**：双向链接必须真正双向写入；不允许只写单向（`link-auto` 已保证）。
@@ -184,7 +184,7 @@ python3 -m scripts.kb.cli config
 
 ## 预构建库（开箱即用）
 
-`data/harmonyos.qdrant/` 已提交仓库（基于默认模型 `paraphrase-MiniLM-L3-v2+` 预构建）。clone 即用，无需重算。
+`data/harmonyos.qdrant/` 已提交仓库（基于默认模型 `paraphrase-multilingual-MiniLM-L12-v2` 预构建）。clone 即用，无需重算。
 
 启用条件（参见 SKILL.md "config.json 驱动"）：
 
@@ -210,7 +210,7 @@ python3 -m scripts.kb.cli config
 | 触发条件 | 一线修复 | 兜底 |
 | ---- | ---- | ---- |
 | `config.json` 缺失 | agent 经 `AskUserQuestion` 询问，选默认则生成默认配置 | 用户拒绝配置则停止，提示手动编辑 `config.json` |
-| 预构建库不存在 | 调 `kb build` 从 `sidebars/` 重建 | `sidebars/` 缺失则用 `search` 子命令的 fetch-sidebars 能力从华为官方文档站重建（见 `search.md`），或向用户索取 sidebars 目录 |
+| 预构建库不存在 | 调 `kb build` 从 `sidebars/` 重建 | `sidebars/` 缺失则向用户索取 sidebars 目录（9 个 `harmonyos-*-sidebar.md`），或经 `search` 子命令查得官方文档正文后自行整理成 sidebar 文件再重建；两者都不可行则退化为纯在线 `search`，不引用本地库 |
 | `kb query` 无结果 | 换关键词或调 `search` 在线搜索 | `search` 也无结果则建议直访 `developer.huawei.com` |
 | ModelScope 模型下载失败 | 重试 + 镜像源配置 | 提示用户手动下载或切 `openai://` 云端模型 |
 
