@@ -3,7 +3,7 @@ name: hap-dev
 description: "鸿蒙应用开发技能。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/DevEco Studio 报错/Stage 模型/元服务/Atomic Service/创建鸿蒙工程/ArkTS 编译错误/hvigor/hdc/faultlogger/jscrash/HAP 构建/文档搜索/知识库。Do NOT trigger for: Flutter/Dart（→flutter-dev）、Element Plus/Vue（→element-dev）"
 license: MIT
 metadata:
-  version: "0.1.3"
+  version: "0.1.4"
   author: "HAP-DEV Contributors"
   tags: "harmonyos, harmony, arkts, arkui, deveco, qdrant, knowledge-base, mcp, testing"
 ---
