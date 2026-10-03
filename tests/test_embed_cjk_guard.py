@@ -6,6 +6,13 @@ paraphrase-MiniLM-L3-v2（bert-base-uncased 词表）把所有中文映射成 [U
 import unittest
 from unittest import mock
 
+try:
+    import sentence_transformers  # noqa: F401
+
+    _HAS_ST = True
+except ImportError:
+    _HAS_ST = False  # CI 轻量环境不装 torch 级依赖；嵌入守卫测试在装有 sentence-transformers 的本地环境执行
+
 
 class _UnkTokenizer:
     unk_token_id = 100
@@ -31,6 +38,7 @@ class _HealthyST:
         self.tokenizer = _HealthyTokenizer()
 
 
+@unittest.skipUnless(_HAS_ST, "sentence-transformers 未安装（CI 轻量环境）")
 class TestCjkGuard(unittest.TestCase):
     MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
