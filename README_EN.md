@@ -4,7 +4,7 @@
 
 English | [中文](README.md)
 
-[![Version](https://img.shields.io/github/v/release/Kirky-X/hap-dev?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
+[![Version](https://img.shields.io/github/v/release/Kirky-X/hap-dev?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-326%20passing-brightgreen?style=flat-square)](#-tests--verification)
 
 ## ✨ Features
 
@@ -68,16 +68,21 @@ node scripts/create/copy-template.mjs --project-path <输出目录> --app-name <
 
 ## ✅ Tests & Verification
 
-Measured (2026-09-13):
+Measured (2026-10-04):
 
 ```bash
-# 全量测试（kb + search + test 三个子命令，离线可跑：FakeEmbedder 确定性向量）
-python3 -m pytest scripts/ -q
-# → 254 passed in 5.89s
+# Full suite (same as CI, matching `pytest tests scripts` in `.github/workflows/quality.yml`:
+# top-level tests/ = offline .mjs smoke tests + scripts/ = contract tests for the kb/search/test subcommands; runs offline)
+python3 -m pytest -q
+# → 326 passed, 11 subtests passed in 11.54s
 
-# 仅 kb 子命令
+# scripts/ contract tests only (deterministic vectors via FakeEmbedder)
+python3 -m pytest scripts/ -q
+# → 254 passed in 4.64s
+
+# kb subcommand only
 python3 -m pytest scripts/kb/tests/ -q
-# → 167 passed in 5.81s
+# → 167 passed in 4.33s
 ```
 
 The 14 `kb` sub-actions, counted live via `python3 -m scripts.kb.cli --help`: query, build, merge, reindex, update-description, recommend-api, link-auto, migrate-embed-model, config, fetch-content, update-content, migrate-context, fetch-and-update, refresh-expired.
@@ -101,12 +106,12 @@ hap-dev/
 └── scripts/
     ├── create/                     # copy-template.mjs + detect-sdk.mjs
     ├── fix/                        # 5 个 .mjs 诊断脚本 + shared/
-    ├── kb/                         # 16 模块 + tests/ + build_db.py
+    ├── kb/                         # 16 个 .py 模块（含 build_db.py）+ tests/
     ├── search/                     # _http.py / search.py / detail.py + tests/
     └── test/                       # platform.py + cli.py + tests/
 ```
 
-> `.attic-hapdev-ts/` is a leftover archive from the early `.ts` diagnostic scripts after their migration to `.mjs`; it takes no part in execution. The `sidebars/` source directory is not shipped with the package — the pre-built store already contains all vectors, and rebuilding requires you to supply your own `harmonyos-*-sidebar.md` files.
+> The `sidebars/` source directory is not shipped with the package — the pre-built store already contains all vectors, and rebuilding requires you to supply your own `harmonyos-*-sidebar.md` files.
 
 ## 🔮 Boundaries
 

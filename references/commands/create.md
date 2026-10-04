@@ -1,6 +1,6 @@
 # create 子命令 —— 创建 ArkTS 工程
 
-经 skill 私有 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程：模板递归复制 + 占位符替换 + DevEco SDK 自动探测 + bundleName 派生 + `main_pages.json` / `EntryAbility.ets` 同步。
+经 skill 私有 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程：模板递归复制 + 占位符替换 + DevEco SDK 自动探测 + bundleName 派生。脚本不修改 `main_pages.json` / `EntryAbility.ets`；两者的同步是 Step 4 特性工作中 agent 的职责。
 
 > 模板源位于 `references/project-template/application/`，脚本读取此目录作为脚手架基础。所有模板文件、二进制资源、占位符替换、SDK 探测均由脚本统一完成，agent 不手动逐文件复制。
 

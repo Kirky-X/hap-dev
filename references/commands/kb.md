@@ -1,16 +1,16 @@
 # kb 子命令 —— 本地 Qdrant 知识库
 
-本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，可切 ModelScope / 云端 OpenAI）+ bm25 关键词索引 + 可选 FlashRank 重排。`description` 懒填充 + 向量回填 + 双向链接。
+本地 Qdrant 知识库，9 类 sidebar 文档 + `api-recommend` 推荐文档分类存储，向量嵌入（默认 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，可切 ModelScope / 云端 OpenAI）+ bm25 关键词索引 + 可选 FlashRank 重排。`description` 懒填充 + 向量回填 + 双向链接。
 
 > 🔴 **CHECKPOINT**：所有路径 / 模型名 / 端点都从 `config.json` 读，禁止硬编码（参见"禁止事项 #2"）。
 
 ## 子动作路由表
 
-命令格式：`python3 -m scripts.kb.cli <action> [args]`（也支持绝对路径直接调用 `python3 {SKILL_DIR}/scripts/kb/cli.py`，二者等价）
+命令格式：`python3 -m scripts.kb.cli <action> [args]`（也支持绝对路径直接调用 `python3 {SKILL_DIR}/scripts/kb/cli.py`，二者等价）。`<action>` 必填，没有默认子动作——不带子动作运行只打印 usage 并以非零码退出。
 
 | 子动作 | 用途 | 关键参数 |
 | ---- | ---- | ---- |
-| `query`（默认） | 混合向量+BM25 检索 | `--question` `--top-k` `--doc-type` `--rerank` |
+| `query` | 混合向量+BM25 检索 | `--question` `--top-k` `--doc-type` `--rerank` |
 | `build` | 解析 sidebars 构建索引 | `--sidebars-dir` |
 | `merge` | 合并两个库为新库 | `--db-a` `--db-b` `--out` |
 | `reindex` | 重算向量 | `--force` |
@@ -27,7 +27,7 @@
 
 `--config <path>` 全局可选，覆盖默认 `config.json` 加载路径。
 
-## 9 类 doc_type
+## doc_type 分类（9 类 sidebar + api-recommend）
 
 | doc_type | sidebar 文件 |
 | ---- | ---- |
@@ -40,8 +40,9 @@
 | `design-guide` | `harmonyos-design-guide-sidebar.md` |
 | `device-api` | `harmonyos-device-api-sidebar.md` |
 | `device-dev` | `harmonyos-device-dev-sidebar.md` |
+| `api-recommend` | 无 sidebar 文件；由 `recommend-api` 写入（推荐 API 目标文档在库中不存在时新建） |
 
-`query --doc-type` 只接受上述 9 类之一；不指定则全库检索。
+`query --doc-type` 按上述值过滤，不指定则全库检索。该参数**不做合法性校验**：传非法值不会报错，而是静默返回空结果（退出码 0），传参前须自行核对上表。
 
 ## config.json 字段说明
 
@@ -63,7 +64,7 @@
 
 ## 主要流程
 
-### 1. query（默认子动作）
+### 1. query
 
 ```bash
 python3 -m scripts.kb.cli query \
@@ -140,7 +141,7 @@ python3 -m scripts.kb.cli merge \
 1. 创建新库 `<new_path>`。
 2. 把 A、B 两个旧库改名为 `<old>.bak.<timestamp>`（备份）。
 3. 字段级 `updated_at` 比较：同一文档（按 `id`）取 `updated_at` 较新的一方。
-4. 输出 JSON `{merged, needs_reindex_count, ...}`。
+4. 输出 JSON `{merged_count, backups, needs_reindex_count}`。
 5. 若 `needs_reindex_count > 0` → 脚本在 stderr 提示：在新库上跑 `reindex --force` 刷新向量。
 
 **用户后续操作**：
@@ -218,7 +219,7 @@ python3 -m scripts.kb.cli config
 
 | 情形 | 处理 |
 | ---- | ---- |
-| `--doc-type` 非 9 类之一 | argparse 校验失败，退出码 2；提示合法值 |
+| `--doc-type` 传非法值 | CLI 不校验、不报错，静默返回空结果（退出码 0）；传参前自行核对"doc_type 分类"表 |
 | `query` 命中但 `needs_description=True` | 必须执行 description 懒填充流程；不填充算违规 |
 | 双向链接仅单向写 | 禁止；用 `link-auto`（内部保证双向写 `related_ids`） |
 | `merge` 后 `needs_reindex_count > 0` | 在新库跑 `reindex --force` 刷新向量 |
@@ -229,7 +230,7 @@ python3 -m scripts.kb.cli config
 ## 交付核对清单
 
 ### query 流程
-- [ ] `--question` 已传；`--doc-type`（如有）属于 9 类之一
+- [ ] `--question` 已传；`--doc-type`（如有）属于"doc_type 分类"表中的取值
 - [ ] 命中 `needs_description=True` 文档时已执行懒填充（首选 `fetch-and-update` 一体化，或 `update-content` 两步走）
 - [ ] 懒填充后已跑链接提取（`recommend-api` 单文档 / `link-auto` 全库）
 - [ ] ArkUI 主题查询同时参考了 `references/arkui/`

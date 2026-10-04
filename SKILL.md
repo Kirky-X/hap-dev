@@ -12,10 +12,10 @@ metadata:
 
 五个子命令覆盖鸿蒙应用开发全生命周期：create（创建工程）→ fix（修复错误）→ test（测试验证），辅以 kb（本地知识库）与 search（在线文档搜索）作为知识支撑。
 
-- **create**（上游）— 基于 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程，模板复制 + SDK 自动探测 + bundleName 派生 + main_pages.json/EntryAbility 同步。解决"工程**怎么起**"。
+- **create**（上游）— 基于 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程，模板复制 + SDK 自动探测 + bundleName 派生。解决"工程**怎么起**"。
 - **fix**（修复）— 聚合三套修复轨道：编译错误（31 类 error-fixes references）、运行时 JSCrash（5 个 Node 脚本 + faultlogger/hilog 证据链）、语法规范（grammar references）。按症状路由。解决"**错了怎么改**"。
 - **test**（验证）— 平台检测 + 条件启用 DevEco MCP（@deveco-codegenie/mcp）。Linux 静态检查（check_ets_files/build_project）；Windows/macOS 模拟器全功能（start_app/UI 树/UI 操作/hilog/verify_ui 自然语言用例）。解决"**对不对**"。
-- **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档分类存储，向量嵌入（默认 `paraphrase-multilingual-MiniLM-L12-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接 + context 网页内容缓存。子动作（14 个）：query/build/merge/reindex/update-description/recommend-api/fetch-content/fetch-and-update/update-content/migrate-context/refresh-expired/link-auto/migrate-embed-model/config。解决"**本地能查什么**"。
+- **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档 + `api-recommend` 推荐文档分类存储，向量嵌入（默认 `paraphrase-multilingual-MiniLM-L12-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接 + context 网页内容缓存。子动作（14 个）：query/build/merge/reindex/update-description/recommend-api/fetch-content/fetch-and-update/update-content/migrate-context/refresh-expired/link-auto/migrate-embed-model/config。解决"**本地能查什么**"。
 - **search**（在线搜索）— 双端点（developer.huawei.com + device.harmonyos.com）多 catalog 路由，HTML→Markdown 清洗。作为 kb description/链接填充的合法通道之一。解决"**网上有什么**"。
 
 ## 子命令路由
@@ -69,10 +69,12 @@ cd {SKILL_DIR} && node scripts/create/copy-template.mjs \
 # fix（三轨道: 编译错误→error-fixes/ 31 类 references 按症状定位，无脚本，流程见 fix.md 轨道一
 #      | 运行时→parse-jscrash-log.mjs | 语法→grammar/+dev-rules.md）
 cd {SKILL_DIR} && node scripts/fix/parse-jscrash-log.mjs \
-  --log-file <faultlog或hilog文件> [--bundle-name <bundle>] [--source hilog|file] [--include-text]
+  (--log-file <faultlog或hilog文件> | --log-text "<崩溃原文>") \
+  [--bundle-name <bundle>] [--process-hint <进程名>] [--device <deviceId>] [--source hilog|file] [--include-text]
 
 # test
 cd {SKILL_DIR} && python3 -m scripts.test.cli check                                    # 检测平台 + MCP
+cd {SKILL_DIR} && python3 -m scripts.test.cli config --deveco-path <p> --project-path <p> [--additional-groups <g>]  # 生成 MCP 配置 JSON（additional-groups 仅 Win/macOS 生效）
 cd {SKILL_DIR} && python3 -m scripts.test.cli run --ets-files <dir>                    # Linux 静态检查
 cd {SKILL_DIR} && python3 -m scripts.test.cli run --bundle-name <name> --test-plan <p> # Win/macOS 模拟器
 
@@ -93,7 +95,7 @@ cd {SKILL_DIR} && python3 -m scripts.kb.cli migrate-embed-model [--model <name>]
 cd {SKILL_DIR} && python3 -m scripts.kb.cli config
 
 # search
-cd {SKILL_DIR} && python3 -m scripts.search.search "<关键词>" [--endpoint developer|device] [--catalog <X>]
+cd {SKILL_DIR} && python3 -m scripts.search.search "<关键词>" [--endpoint developer|device] [--catalog <X>] [--offset N] [--length N]  # offset 默认 0；length 默认 12、最大 100
 cd {SKILL_DIR} && python3 -m scripts.search.detail <object_id> <catalog>
 
 # 一键重建预构建库（切换 embed_model 后必跑）

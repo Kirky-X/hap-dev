@@ -1,6 +1,6 @@
 # hap-dev — 鸿蒙应用开发技能
 
-[![Version](https://img.shields.io/github/v/release/Kirky-X/hap-dev?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-254%20passing-brightgreen?style=flat-square)](#-测试与验证)
+[![Version](https://img.shields.io/github/v/release/Kirky-X/hap-dev?style=flat-square)](https://github.com/Kirky-X/hap-dev/releases) [![License](https://img.shields.io/github/license/Kirky-X/hap-dev?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-326%20passing-brightgreen?style=flat-square)](#-测试与验证)
 
 中文 | [English](README_EN.md)
 
@@ -68,16 +68,21 @@ node scripts/create/copy-template.mjs --project-path <输出目录> --app-name <
 
 ## ✅ 测试与验证
 
-实测（2026-09-13）：
+实测（2026-10-04）：
 
 ```bash
-# 全量测试（kb + search + test 三个子命令，离线可跑：FakeEmbedder 确定性向量）
+# 全量测试（CI 同款，对应 `.github/workflows/quality.yml` 的 `pytest tests scripts`：
+# 顶层 tests/ 为 .mjs 离线冒烟 + scripts/ 为 kb/search/test 三个子命令契约测试，离线可跑）
+python3 -m pytest -q
+# → 326 passed, 11 subtests passed in 11.54s
+
+# 仅 scripts/ 三个子命令契约测试（FakeEmbedder 确定性向量）
 python3 -m pytest scripts/ -q
-# → 254 passed in 5.89s
+# → 254 passed in 4.64s
 
 # 仅 kb 子命令
 python3 -m pytest scripts/kb/tests/ -q
-# → 167 passed in 5.81s
+# → 167 passed in 4.33s
 ```
 
 `kb` 14 个子动作经 `python3 -m scripts.kb.cli --help` 实测清点：query、build、merge、reindex、update-description、recommend-api、link-auto、migrate-embed-model、config、fetch-content、update-content、migrate-context、fetch-and-update、refresh-expired。
@@ -101,12 +106,12 @@ hap-dev/
 └── scripts/
     ├── create/                     # copy-template.mjs + detect-sdk.mjs
     ├── fix/                        # 5 个 .mjs 诊断脚本 + shared/
-    ├── kb/                         # 16 模块 + tests/ + build_db.py
+    ├── kb/                         # 16 个 .py 模块（含 build_db.py）+ tests/
     ├── search/                     # _http.py / search.py / detail.py + tests/
     └── test/                       # platform.py + cli.py + tests/
 ```
 
-> `.attic-hapdev-ts/` 为早期 `.ts` 诊断脚本迁移到 `.mjs` 后的归档残留，不参与运行。`sidebars/` 源目录不随包分发——预构建库已含全部向量，重建需自行提供 `harmonyos-*-sidebar.md`。
+> `sidebars/` 源目录不随包分发——预构建库已含全部向量，重建需自行提供 `harmonyos-*-sidebar.md`。
 
 ## 🔮 边界
 

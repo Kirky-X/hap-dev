@@ -57,7 +57,7 @@ MCP server 启动依赖以下环境变量：
 | ---- | ---- | ---- |
 | `DEVECO_PATH` | 是 | DevEco Studio 安装根目录 |
 | `PROJECT_PATH` | 是 | 鸿蒙工程根路径 |
-| `ADDITIONAL_TOOL_GROUPS` | 否 | 额外工具组（逗号分隔，如 `ui_integration_test,emulator_manager`） |
+| `ADDITIONAL_TOOL_GROUPS` | 否 | 额外工具组（逗号分隔，如 `ui_integration_test,emulator_manager`）；**Linux 下强制为空字符串**——模拟器工具组在 Linux 不可用，传入值被静默丢弃 |
 | `UI_VERIFY_BASE_URL` | verify_ui 用 | AI 视觉模型 API base URL |
 | `UI_VERIFY_API_KEY` | verify_ui 用 | AI 视觉模型 API key |
 | `UI_VERIFY_MODEL_NAME` | verify_ui 用 | AI 视觉模型名（如 `Qwen3-VL`） |
@@ -70,6 +70,8 @@ python3 -m scripts.test.cli config \
   --project-path "/path/to/project" \
   [--additional-groups "ui_integration_test,emulator_manager"]
 ```
+
+> `--additional-groups` 仅在 Windows/macOS 生效；Linux 下 `ADDITIONAL_TOOL_GROUPS` 恒为空字符串，传入值被丢弃（模拟器工具组在 Linux 不可用）。
 
 输出 MCP 配置 JSON（含 `DEVECO_PATH` / `PROJECT_PATH` / `ADDITIONAL_TOOL_GROUPS` 字段），用户/agent 据此启动 MCP server。
 
