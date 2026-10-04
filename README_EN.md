@@ -29,11 +29,12 @@ flowchart LR
 ## 📦 Installation
 
 ```bash
-# 方式一：从 skills 工作区同步部署（脚本在工作区根 scripts/ 下，仅工作区开发者可用）
+# 方式 1：
 bash scripts/sync-skills.sh hap-dev
 
-# 方式二：手动复制
+# 方式 2：
 cp -r hap-dev/ ~/.zcode/skills/hap-dev/   # Claude Code / ZCode；Codex 为 ~/.codex/skills/
+
 # Option 3: Remote install (GitHub repo)
 npx skills add Kirky-X/hap-dev --agent claude-code -y
 ```
