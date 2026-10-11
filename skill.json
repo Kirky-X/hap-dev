@@ -1,6 +1,6 @@
 {
   "name": "hap-dev",
-  "description": "鸿蒙应用开发技能。5 子命令: create(创建ArkTS工程) / fix(编译+运行时+语法修复) / test(MCP平台检测测试) / kb(Qdrant知识库查询/构建/合并/重索引) / search(双端点在线文档搜索)。覆盖鸿蒙开发全生命周期。",
+  "description": "鸿蒙应用开发技能。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/DevEco Studio 报错/Stage 模型/元服务/Atomic Service/创建鸿蒙工程/ArkTS 编译错误/hvigor/hdc/faultlogger/jscrash/HAP 构建/文档搜索/知识库。Do NOT trigger for: Flutter/Dart（→flutter-dev）、Element Plus/Vue（→element-dev）；设计稿转 ArkTS 页面代码、DESIGN.md/design token（→maliang）；图标资产与 sys.symbol 图标名检索（→xizhi）",
   "license": "MIT",
   "version": "0.1.6",
   "author": "HAP-DEV Contributors",
