@@ -1,5 +1,7 @@
 {
   "external_paths": [
-    "docs/"
+    "docs/",
+    "hmos-runtime-fix-skill/",
+    "quick-rules/"
   ]
 }

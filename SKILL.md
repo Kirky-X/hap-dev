@@ -1,9 +1,9 @@
 ---
 name: hap-dev
-description: "鸿蒙应用开发技能。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/DevEco Studio 报错/Stage 模型/元服务/Atomic Service/创建鸿蒙工程/ArkTS 编译错误/hvigor/hdc/faultlogger/jscrash/HAP 构建/文档搜索/知识库。Do NOT trigger for: Flutter/Dart（→flutter-dev）、Element Plus/Vue（→element-dev）；设计稿转 ArkTS 页面代码、DESIGN.md/design token（→maliang）；图标资产与 sys.symbol 图标名检索（→xizhi）"
+description: "鸿蒙应用开发技能。触发：HarmonyOS/鸿蒙/ArkTS/ArkUI/DevEco/DevEco Studio 报错/Stage 模型/元服务/Atomic Service/创建鸿蒙工程/ArkTS 编译错误/hvigor/hdc/faultlogger/jscrash/HAP 构建/命令行构建/签名/发布上架/模拟器/Emulator/CI 流水线/文档搜索/知识库。Do NOT trigger for: Flutter/Dart（→flutter-dev）、Element Plus/Vue（→element-dev）；设计稿转 ArkTS 页面代码、DESIGN.md/design token（→maliang）；图标资产与 sys.symbol 图标名检索（→xizhi）"
 license: MIT
 metadata:
-  version: "0.1.7"
+  version: "0.1.8"
   author: "HAP-DEV Contributors"
   tags: "harmonyos, harmony, arkts, arkui, deveco, qdrant, knowledge-base, mcp, testing"
 ---
@@ -13,8 +13,8 @@ metadata:
 五个子命令覆盖鸿蒙应用开发全生命周期：create（创建工程）→ fix（修复错误）→ test（测试验证），辅以 kb（本地知识库）与 search（在线文档搜索）作为知识支撑。
 
 - **create**（上游）— 基于 Node 脚本 `scripts/create/copy-template.mjs` 创建 ArkTS 工程，模板复制 + SDK 自动探测 + bundleName 派生。解决"工程**怎么起**"。
-- **fix**（修复）— 聚合三套修复轨道：编译错误（31 类 error-fixes references）、运行时 JSCrash（5 个 Node 脚本 + faultlogger/hilog 证据链）、语法规范（grammar references）。按症状路由。解决"**错了怎么改**"。
-- **test**（验证）— 平台检测 + 条件启用 DevEco MCP（@deveco-codegenie/mcp）。Linux 静态检查（check_ets_files/build_project）；Windows/macOS 模拟器全功能（start_app/UI 树/UI 操作/hilog/verify_ui 自然语言用例）。解决"**对不对**"。
+- **fix**（修复）— 聚合三套修复轨道：编译错误（31 类 error-fixes references + 错误码锚点速查 compile-traps）、运行时 JSCrash（5 个 Node 脚本 + faultlogger/hilog 证据链 + 8 类错误模式库与故障模式库 patterns/）、语法规范（grammar references）。按症状路由。解决"**错了怎么改**"。
+- **test**（验证）— 平台检测 + 条件启用 DevEco MCP（@deveco-codegenie/mcp）。Linux 静态检查（check_ets_files/build_project）；Windows/macOS 模拟器全功能（start_app/UI 树/UI 操作/hilog/verify_ui 自然语言用例）；MCP 不可用或 Linux/CI 场景降级为原生 CLI 通道（hvigorw 构建 + Emulator CLI + hdc，见 [`references/commands/build.md`](references/commands/build.md) 与 [`references/commands/emulator.md`](references/commands/emulator.md)）。解决"**对不对**"。
 - **kb**（知识库）— 本地 Qdrant 知识库，9 类 sidebar 文档 + `api-recommend` 推荐文档分类存储，向量嵌入（默认 `paraphrase-multilingual-MiniLM-L12-v2`，ModelScope/云端可切换）+ bm25 关键词索引 + 可选 FlashRank 重排。description 懒填充 + 向量回填 + 双向链接 + context 网页内容缓存。子动作（14 个）：query/build/merge/reindex/update-description/recommend-api/fetch-content/fetch-and-update/update-content/migrate-context/refresh-expired/link-auto/migrate-embed-model/config。解决"**本地能查什么**"。
 - **search**（在线搜索）— 双端点（developer.huawei.com + device.harmonyos.com）多 catalog 路由，HTML→Markdown 清洗。作为 kb description/链接填充的合法通道之一。解决"**网上有什么**"。
 
@@ -29,6 +29,8 @@ flowchart TD
     A --> F["崩溃/白屏/jscrash"]
     A --> H["语法对不对/TS 差异"]
     A --> J["测试/构建/启动模拟器"]
+    A --> K2["命令行构建 App/签名/发布上架/CI 流水线"]
+    A --> K3["模拟器创建/镜像/启动关闭/场景模拟"]
     A --> L["查本地知识库/语义检索"]
     A --> N["在线查文档/API/指南"]
     A --> P["知识库管理/切换模型/合并"]
@@ -37,6 +39,8 @@ flowchart TD
     F --> G[fix<br/>runtime-fix 轨道]
     H --> I[fix<br/>grammar 轨道]
     J --> K[test<br/>platform.py 检测]
+    K2 --> K4[build.md<br/>hvigorw/hap-sign-tool]
+    K3 --> K5[emulator.md<br/>Emulator CLI/hdc]
     L --> M[kb<br/>query, 默认 top-5]
     N --> O[search<br/>双端点路由]
     P --> Q[kb<br/>build/merge/reindex]
@@ -45,9 +49,14 @@ flowchart TD
 | 用户意图                                    | 子命令   | 完整流程                                                          |
 | ------------------------------------------- | -------- | ----------------------------------------------------------------- |
 | 创建 / 新建 ArkTS 工程（从零/脚手架）       | create   | [`references/commands/create.md`](references/commands/create.md) |
+| 工程目录结构 / 配置文件职责 / 资源目录       | create / fix / test（参照） | [`references/project-structure.md`](references/project-structure.md) |
 | ArkTS 编译失败 / 类型错误 / build 报错      | fix      | [`references/commands/fix.md`](references/commands/fix.md)        |
 | 运行时崩溃 / jscrash / 白屏 / 闪退 / faultlog | fix      | [`references/commands/fix.md`](references/commands/fix.md)        |
 | ArkTS 语法问题 / TS→ArkTS 差异 / 是否允许某语法 | fix   | [`references/commands/fix.md`](references/commands/fix.md)        |
+| 命令行构建 HAP/APP / hvigorw / CI 流水线    | test（CLI 通道） | [`references/commands/build.md`](references/commands/build.md) |
+| 签名（keytool/hap-sign-tool/signingConfigs）/ 发布上架 AGC | test（CLI 通道） | [`references/commands/build.md`](references/commands/build.md) |
+| 模拟器创建/镜像下载/启动关闭/命令行管理     | test（CLI 通道） | [`references/commands/emulator.md`](references/commands/emulator.md) |
+| 模拟器场景模拟（GPS/电池/旋转）/UI 坐标操作 | test（CLI 通道） | [`references/commands/emulator.md`](references/commands/emulator.md) |
 | ArkUI 组件 / 布局 / 状态管理 / .ets UI 代码  | kb       | [`references/commands/kb.md`](references/commands/kb.md) + `references/arkui/` |
 | 编译构建 / 启动应用 / 模拟器测试 / UI 验证   | test     | [`references/commands/test.md`](references/commands/test.md)      |
 | 查询本地知识库 / 鸿蒙文档语义检索            | kb       | [`references/commands/kb.md`](references/commands/kb.md)          |
@@ -98,6 +107,16 @@ cd {SKILL_DIR} && python3 -m scripts.kb.cli config
 cd {SKILL_DIR} && python3 -m scripts.search.search "<关键词>" [--endpoint developer|device] [--catalog <X>] [--offset N] [--length N]  # offset 默认 0；length 默认 12、最大 100
 cd {SKILL_DIR} && python3 -m scripts.search.detail <object_id> <catalog>
 
+# 原生 CLI 通道（无 DevEco Studio/CI 场景，详见 references/commands/build.md 与 emulator.md）
+cd <工程根目录> && hvigorw clean --no-daemon
+hvigorw assembleHap --mode module -p product=default -p buildMode=release --no-daemon  # 构建 HAP
+hvigorw assembleApp --mode project -p product=default -p buildMode=release --no-daemon # 构建 APP（上架包，产物 build/outputs/{product}/）
+hdc tconn 127.0.0.1:5555                                                               # 连接模拟器（端口占用 +2 递增）
+hdc file send <xxx-signed.hap> data/local/tmp/a.hap && hdc shell bm install -p data/local/tmp/a.hap
+Emulator -list -details                                                                # 模拟器列表（工具在 {CLT}/emulator 或 {DevEco}/tools/emulator）
+Emulator -start "my Emulator" -instancePath <路径> -imageRoot <路径> [-noWindow]       # Linux 无图形环境 -noWindow 必选
+Emulator -stop "my Emulator"
+
 # 一键重建预构建库（切换 embed_model 后必跑）
 cd {SKILL_DIR} && python3 scripts/kb/build_db.py
 ```
@@ -106,7 +125,7 @@ cd {SKILL_DIR} && python3 scripts/kb/build_db.py
 
 ### 前置检查：DevEco MCP 配置（需求#3）
 
-> 🔴 **CHECKPOINT**：运行此 skill 时，agent MUST 先检查 `@deveco-codegenie/mcp` 是否已配置完成。检查方式：询问用户或在 `~/.config/claude/claude_desktop_config.json`（或对应 runtime 的 MCP 配置文件）中查找 `deveco-codegenie` 条目。若未配置，需告知用户："检测到 DevEco MCP 未安装，test 子命令的模拟器全功能（start_app / UI 树 / verify_ui 自然语言用例 / hilog 采集 / save_ui_screenshot）将不可用，仅 Linux 静态检查（check_ets_files / build_project）可用。请执行 `npm i -g @deveco-codegenie/mcp` 并在 MCP 配置中注册后再使用模拟器测试功能。"
+> 🔴 **CHECKPOINT**：运行此 skill 时，agent MUST 先检查 `@deveco-codegenie/mcp` 是否已配置完成。检查方式：询问用户或在 `~/.config/claude/claude_desktop_config.json`（或对应 runtime 的 MCP 配置文件）中查找 `deveco-codegenie` 条目。若未配置，需告知用户："检测到 DevEco MCP 未安装，test 子命令的模拟器 MCP 闭环（start_app / UI 树 / verify_ui 自然语言用例 / hilog 采集 / save_ui_screenshot）不可用。可选择：①执行 `npm i -g @deveco-codegenie/mcp` 并在 MCP 配置中注册后使用 MCP 全功能；②直接走原生 CLI 降级通道（hvigorw 构建 + Emulator CLI + hdc，见 references/commands/build.md 与 emulator.md），Linux 26.0.0+ 同样支持模拟器。"
 
 ### 开发规则（ArkTS / API / ArkUI 动画）
 
@@ -190,6 +209,10 @@ flowchart LR
 | create | ✅ | ✅ | ✅ |
 | fix | ✅ | ✅ | ✅ |
 | test（静态检查） | ✅ | ✅ | ✅ |
-| test（模拟器） | ❌ | ✅ | ✅ |
+| test（模拟器，DevEco MCP） | ❌ | ✅ | ✅ |
+| test（模拟器，原生 CLI 降级通道） | ✅ 26.0.0+（`-noWindow`） | ✅ | ✅ |
+| test（hvigorw 命令行构建/签名） | ✅ | ✅ | ✅ |
 | kb | ✅ | ✅ | ✅ |
 | search | ✅ | ✅ | ✅ |
+
+> 原生 CLI 通道 = Command Line Tools（hvigorw/ohpm/hdc/Emulator），官方自 CLT 6.1.0 起集成 Emulator（Win/macOS）、26.0.0 起支持 Linux 模拟器。详见 build.md / emulator.md。

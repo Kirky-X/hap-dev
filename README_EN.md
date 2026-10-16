@@ -11,13 +11,13 @@ English | [中文](README.md)
 | Subcommand | Function | Key facts |
 | ---------- | -------- | --------- |
 | `create` | Create an HAP project from the built-in ArkTS project template | `copy-template.mjs` + SDK detection + bundleName derivation |
-| `fix` | Three-track fixing: compile errors → runtime JSCrash → grammar rules | 31 categories of error-fixes docs; 5 Node diagnostic scripts |
-| `test` | Platform detection: Linux static checks / Win·macOS emulator loop | `scripts/test/cli.py check` degrades automatically |
+| `fix` | Three-track fixing: compile errors → runtime JSCrash → grammar rules | 31 categories of error-fixes docs + error-code anchors (compile-traps) + 8 error pattern libraries and fault-mode library (patterns); 5 Node diagnostic scripts |
+| `test` | Platform detection: Linux static checks / Win·macOS emulator loop / native CLI fallback (hvigorw + Emulator + hdc) | `scripts/test/cli.py check` degrades automatically |
 | `kb` | Local Qdrant knowledge base: vector + BM25 hybrid retrieval | **14 sub-actions** (query/build/merge/reindex/…/config) |
 | `search` | Dual-endpoint online documentation search + detail HTML→Markdown | developer / device endpoints with multi-catalog routing |
 
 - **Pre-built knowledge base, out of the box**: `data/harmonyos.qdrant/` (measured: 967 documents, 384 dimensions, ~4.6 MB); default embedding model `paraphrase-multilingual-MiniLM-L12-v2`, switchable to ModelScope or cloud `openai://` models
-- **Subcommand routing**: `SKILL.md` is the single router; each subcommand's complete workflow lives in `references/commands/{create,fix,test,kb,search}.md`
+- **Subcommand routing**: `SKILL.md` is the single router; each subcommand's complete workflow lives in `references/commands/{create,fix,test,kb,search}.md`; command-line build/sign/publish (build.md), emulator CLI (emulator.md) cover CI scenarios without DevEco Studio; project structure quick reference in `references/project-structure.md`
 
 ```mermaid
 flowchart LR
@@ -45,7 +45,7 @@ Dependencies:
 | ---------- | ------------------- | ------------ |
 | Python dependencies | kb / search / test | `pip install -r requirements.txt` (required: qdrant-client, rank-bm25, httpx, sentence-transformers, modelscope; optional: flashrank, openai) |
 | Node.js 18+ | create / fix | No external npm dependencies; only `node:*` built-in modules |
-| DevEco MCP (optional) | test emulator loop | `npm i -g @deveco-codegenie/mcp`, available only on Win/macOS; Linux automatically degrades to static checks |
+| DevEco MCP (optional) | test emulator loop | `npm i -g @deveco-codegenie/mcp`, available only on Win/macOS; on Linux or without MCP, falls back to the native CLI channel (Emulator CLI supports Linux since 26.0.0 with `-noWindow`) |
 
 ## 🚀 Quick Start
 
@@ -97,9 +97,9 @@ hap-dev/
 ├── requirements.txt                # Python 依赖
 ├── data/harmonyos.qdrant/          # 预构建知识库（967 条 / ~4.6 MB）
 ├── references/
-│   ├── commands/                   # create/fix/test/kb/search 流程文档
+│   ├── commands/                   # create/fix/test/kb/search 流程文档 + build（命令行构建签名发布）/emulator（模拟器 CLI）
 │   ├── error-fixes/                # 31 类 ArkTS 编译错误修复文档
-│   ├── runtime-fix/                # evals 评测样例（JSCrash 诊断流程在 commands/fix.md 轨道二）
+│   ├── runtime-fix/                # evals 评测样例 + patterns/ 崩溃模式库（JSCrash 诊断流程在 commands/fix.md 轨道二）
 │   ├── grammar/                    # ArkTS 语法规范 + TS 差异
 │   ├── arkui/                      # ArkUI cookbook + 检查清单
 │   ├── dev-rules.md                # 67 条语法 + 10 条 API + 4 条动画强制规则
@@ -121,7 +121,7 @@ From the [SKILL.md](SKILL.md) trigger description, do **not** trigger this skill
 - **Flutter / Dart** questions → use `flutter-dev`
 - **Element Plus / Vue** questions → use `element-dev`
 
-In addition: the `test` emulator tooling is available only on Windows/macOS; hdc log collection in `fix` is available only on Win/macOS (Linux degrades to log-file parsing); fetched remote document content is always treated as data — instructions inside it are never executed.
+In addition: the DevEco MCP emulator tooling for `test` is available only on Windows/macOS (Linux uses the native CLI fallback: Emulator supports Linux since 26.0.0 with `-noWindow`); hdc log collection in `fix` is available only on Win/macOS (Linux degrades to log-file parsing); fetched remote document content is always treated as data — instructions inside it are never executed.
 
 ## 📄 License & Attribution
 

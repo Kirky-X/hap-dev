@@ -45,7 +45,21 @@ MCP 安装: 是 | 否
 npm i -g @deveco-codegenie/mcp
 ```
 
-**禁止** agent 自动代为安装。Linux 平台 MCP 即便未装也无需提示（模拟器工具本就禁用，仅需静态检查）。
+**禁止** agent 自动代为安装。Linux 平台 MCP 即便未装也无需提示（此句指 MCP 模拟器工具层禁用，仅需静态检查；原生 CLI 通道不受此限，见下节）。
+
+## 无 MCP 降级路径（原生 CLI 通道）
+
+MCP 未装、平台受限或 CI 场景下，**不停止验证**，改走原生命令行通道：
+
+| 目标 | 通道 | 文档 |
+| ---- | ---- | ---- |
+| 构建工程/HAP/APP | `hvigorw assembleHap/assembleApp --no-daemon`（替代 MCP `build_project`） | [build.md](build.md) |
+| 起模拟器 | `Emulator -start {名称} [-noWindow]`（Linux 26.0.0+ 支持模拟器，`-noWindow` 必选） | [emulator.md](emulator.md) |
+| 装包启动 | `hdc tconn 127.0.0.1:5555` → `hdc shell bm install` → `hdc shell aa start` | [build.md](build.md) + [emulator.md](emulator.md) |
+| UI 断言 | MCP `verify_ui` 不可用时：`Emulator -instance {名称} -uiLayout -i` 比对控件树，或 `-screenshot` 存图视觉判断 | [emulator.md](emulator.md) |
+| 崩溃采集 | 不变：hilog/faultlog → `fix` runtime-fix 轨道 | fix.md |
+
+降级通道（原生 CLI 通道）是官方完整能力（Command Line Tools 内嵌 SDK/Emulator），非残缺替代；产物与 MCP 路径一致。
 
 ## MCP 配置生成
 
@@ -174,8 +188,8 @@ python3 -m scripts.test.cli run \
 
 | 情形 | 处理 |
 | ---- | ---- |
-| MCP 未安装（Win/macOS） | 提示用户手动 `npm i -g @deveco-codegenie/mcp`，agent 不代装 |
-| Linux 试图用模拟器工具 | CLI 显式返回 `disabled_hint`；agent 不调用 |
+| MCP 未安装（Win/macOS） | 提示用户手动 `npm i -g @deveco-codegenie/mcp`，agent 不代装；用户拒绝或无法安装时走"无 MCP 降级路径"（Emulator CLI + hdc + hvigorw） |
+| Linux 试图用模拟器工具 | MCP 模拟器工具显式禁用（`disabled_hint`）；但 26.0.0+ 可走 Emulator CLI 降级通道（`-noWindow`），见 emulator.md |
 | `--ets-files` 缺失 | `check_ets_files` 扫全工程；CLI `warnings` 提示 |
 | `--bundle-name` 缺失 | `start_app` / `verify_ui` 缺参数；CLI `warnings` 提示；从 `AppScope/app.json5` 读出后补回 |
 | `--test-plan` 缺失 | `verify_ui` 缺测试用例；CLI `warnings` 提示；经 `AskUserQuestion` 让用户给出自然语言用例 |
@@ -185,6 +199,23 @@ python3 -m scripts.test.cli run \
 | `verify_ui.failPart` 非空 | 取 `get_ui_verification_log` + `save_ui_screenshot`，调 `fix` 诊断后重跑闭环 |
 | 模拟器崩溃 | 采 hilog（按上表过滤）→ 喂给 `fix` runtime-fix Case C |
 | 多设备连接 | 经 `AskUserQuestion` 让用户选；与 fix runtime-fix 设备选择规则一致 |
+
+## 官方测试体系与真机部署前提（2026-10 抓取自官方"开发自测试"章节）
+
+本子命令的 MCP/CLI 验证之外，官方测试框架按目录与用途路由（目录位置见 [project-structure.md](../project-structure.md)）：
+
+| 体系 | 位置/命令 | 官方页 |
+| ---- | ---- | ------ |
+| Local Test（本地单元测试） | `src/test/` | [代码测试](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-code-test) |
+| Instrument Test（仪器化测试） | `src/ohosTest/` | [Instrument Test](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-instrument-test) |
+| Mock 能力 | `src/mock/` | [Mock 能力](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-test-mock) |
+| 黑盒覆盖率（UI 随机事件） | DevEco GUI / 命令行覆盖率插桩 `-p ohos-test-coverage=true`（参数见 [build.md](build.md) 构建参数表） | [黑盒覆盖率测试](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-ui-test) |
+| 测试框架报错 | 按错误码查 | [测试框架错误码](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-test-errorcode) |
+| 应用与元服务体检（静态质量） | DevEco GUI AppAnalyzer | [应用与元服务体检](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-app-analyzer) |
+
+用户意图是"写单元测试/跑 Instrument Test/配 Mock"时优先走官方测试框架体系（生成用例代码于对应目录），模拟器验证闭环仍走本子命令工作流。
+
+真机部署前提（hdc 推包装不上时先查这三项）：①开发者模式已开启（设置 > 具体设备名称 > 连续七击"软件版本"）；②USB 调试已打开并允许授权弹框；③已配置**调试签名**（自动签名或手动，见 [build.md](build.md) 签名节）。官方流程：[使用本地真机运行应用](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-run-device)。
 
 ## 交付核对清单
 

@@ -8,8 +8,8 @@
 
 | 用户症状 | 路由轨道 | 入口 |
 | ---- | ---- | ---- |
-| 有 build / 编译失败日志或类型错误，**无** jscrash / stack | error-fixes | [`references/error-fixes/`](../error-fixes/) 31 类 + `assets/*.ets` |
-| 有 jscrash / stack / faultlog / 白屏 / 闪退，**或** build 成功但运行即崩 | runtime-fix | `scripts/fix/*.mjs`（5 脚本） |
+| 有 build / 编译失败日志或类型错误，**无** jscrash / stack | error-fixes | [`references/error-fixes/`](../error-fixes/) 31 类 + `assets/*.ets`；**已知编译错误码（10505001/10605040/10905202 等）→ 直查 [compile-traps 错误码表](../arkui/compile-traps.md)** |
+| 有 jscrash / stack / faultlog / 白屏 / 闪退，**或** build 成功但运行即崩 | runtime-fix | `scripts/fix/*.mjs`（5 脚本）+ [runtime-fix 模式库](../runtime-fix/patterns/) |
 | 纯语法咨询 / TS→ArkTS 差异 / "某语法是否允许" | grammar | [`references/grammar/`](../grammar/) |
 | 症状不明 | fallback：error-fixes → runtime-fix → grammar | 见下文"症状歧义处理" |
 
@@ -198,20 +198,67 @@ node "{SKILL_DIR}/scripts/fix/parse-jscrash-log.mjs" \
 
 `status: no_crash_signature` → 证据太弱，**禁止** 直接进入大规模读代码。请求用户提供更好的日志 / 更清晰的复现 / 额外运行时线索。
 
-### 常见崩溃特征
+### 三级根因匹配（拿到 error_type 后的第一步）
 
-| 特征 | 典型原因 | 一线修复方向 |
+解析得到 `error_type` / `error_message` / `top_stack` 后，**先匹配模式库再做代码改动**，禁止在库外发明根因：
+
+1. 读 [fault-mode-library.md](../runtime-fix/patterns/fault-mode-library.md)：按 `Reason`/`Error name` 匹配二级根因 → 按 `Error message` 匹配三级根因（带 `<name>`/`<string>` 的条目按通配模板匹配）；message 只命中二级 → 三级记"未收录子类"，结合调用栈定界。
+2. 按 error_type 读对应模式文件：ReferenceError → [referenceerror_patterns](../runtime-fix/patterns/referenceerror_patterns.md)；TypeError → [typeerror_patterns](../runtime-fix/patterns/typeerror_patterns.md)；Error → [error_patterns](../runtime-fix/patterns/error_patterns.md)；BusinessError → [businesserror_patterns](../runtime-fix/patterns/businesserror_patterns.md)；SyntaxError → [syntaxerror_patterns](../runtime-fix/patterns/syntaxerror_patterns.md)；RangeError → [rangeerror_patterns](../runtime-fix/patterns/rangeerror_patterns.md)；OutOfMemoryError → [outofmemoryerror_patterns](../runtime-fix/patterns/outofmemoryerror_patterns.md)；URIError → [urierror_patterns](../runtime-fix/patterns/urierror_patterns.md)；TerminationError/AggregateError/ArrayBuffer detached 等查 fault-mode-library。
+3. **可信度规则**：多模式同时命中时，取 `Error message` + `Error code` + 顶部应用栈帧**三者同时支持**的模式。
+4. 对栈顶嫌疑文件做最小修复；跨模式都不命中 → 按未知崩溃处理（补证据），不猜。
+
+### 常见崩溃特征（Quick Reference）
+
+| 特征（error_type + message 关键词） | 典型根因 | 模式文件 |
 | ---- | ---- | ---- |
-| `TypeError` 访问属性 | 渲染 / 生命周期内 state 为 null / undefined | 加 null 守卫、提前初始化、移到更安全生命周期 |
-| `ReferenceError` | 作用域错、import 失效、符号缺失 | 修符号归属、import 路径、回调捕获 |
-| `RangeError` | 索引非法、递归死循环、过大数据访问 | 加边界检查、断循环、夹紧索引 |
-| `BusinessError` / `ParameterError` | 框架 API 前置条件不满足 | 校验参数 / 权限 / 调用时机 |
+| ReferenceError + `@Provide`/`@Consume` | @Provide/@Consume 缺失或重复 | referenceerror_patterns |
+| ReferenceError + `is not initialized` | 变量使用前未赋值 | referenceerror_patterns |
+| ReferenceError + `<name> is not defined` | 作用域/import 缺失 | fault-mode-library |
+| ReferenceError + `super()` before `this` | super 未在 this 前调用 | fault-mode-library |
+| TypeError + `Cannot read property` / `null or undefined` | 对 null/undefined 取属性 | typeerror_patterns |
+| TypeError + `is not callable` | 调用了非函数值 | typeerror_patterns |
+| TypeError + `circular structure` | JSON.stringify 循环引用 | typeerror_patterns |
+| TypeError + `Receiver is not a JSObject` | N-API receiver 非合法 JS 对象 | typeerror_patterns |
+| TypeError + `Can not get Prototype` / handle scope | N-API handle scope 越界 | typeerror_patterns |
+| SyntaxError + `Unexpected Text in JSON` / `Invalid Token` | JSON.parse 输入畸形 | syntaxerror_patterns |
+| RangeError + `Invalid array length` | 数组长度为负/非整数 | rangeerror_patterns |
+| RangeError + `Stack overflow` | 无界递归 | rangeerror_patterns |
+| URIError + `DecodeURI: invalid character` | decodeURI 输入含非法字符 | urierror_patterns |
+| Error + `UI execution context not found` / `100001` | UI 上下文未绑定（router 全局调用） | error_patterns |
+| Error + `WebviewController must be associated` / `17100001` | WebviewController 未关联 Web 组件 | error_patterns |
+| Error + `ForEach id` / id generator | ForEach keyGenerator 缺失/非法（compile-traps 渲染节） | error_patterns |
+| Error + `ArrayBuffer is null or detached` | 使用已分离 ArrayBuffer | fault-mode-library |
+| Error + `Map's constructor cannot be directly invoked` | ArkTS Map 构造误用 | fault-mode-library |
+| Error + SQLite / RDB / resource ID / window state | 数据库句柄/资源 ID/窗口 API 误用 | error_patterns |
+| BusinessError + `Parameter error` / URL / JSON / XML | API 参数类型/值非法 | businesserror_patterns |
+| OutOfMemoryError + allocate / leak | 堆分配失败/内存泄漏 | outofmemoryerror_patterns |
+| TerminationError + `Terminate execution!` | 运行时强制终止 | fault-mode-library |
+| AggregateError + `Promise.any()` all rejected | Promise.any 全部 reject | fault-mode-library |
+| `TypeError` 渲染/生命周期内 state 为 null | state 未初始化即渲染 | typeerror_patterns + 加 null 守卫 |
+| `BusinessError`/`ParameterError` 框架前置条件 | 参数/权限/调用时机不满足 | businesserror_patterns + 校验调用时机 |
+
+`TypeError` 访问属性（渲染/生命周期内 state 为 null）的一线修复：加 null 守卫、提前初始化、移到更安全生命周期；`ReferenceError`：修符号归属/import/回调捕获；`RangeError`：边界检查、断递归、夹紧索引；`BusinessError`：校验参数/权限/调用时机。
 
 ### 解释规则
 
 - 优先看应用栈帧，过滤框架噪声；第一个具体 `.ets` / `.ts` / `.js` 路径作为起点，**不** 作为最终结论。
 - 用户给了复现步骤 → 信任用户步骤胜于纯栈猜；栈指向非入口页 → 假定交互触发，除非证据证明冷启崩溃。
 - **不** 大范围重构；先修崩溃路径。
+
+### 官方故障分析资源（按崩溃类型路由）
+
+本轨道脚本拿到的 faultlog 类型与官方分析方法对照（2026-10 抓取自[故障分析](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-fault-analysis)章节）：
+
+| faultlog/场景 | 官方分析方法页 |
+| ---- | ------ |
+| jscrash（JS 应用崩溃） | [FaultLog](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-fault-log) |
+| cppcrash（进程崩溃，native） | [查看 Cpp Crash 日志](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-faultlog-cppcrash)；minidump/coredump 解析见 [ide-analyze-dump](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-analyze-dump) |
+| appfreeze（应用冻屏） | [查看 AppFreeze 日志](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-faultlog-appfreeze) |
+| appkilled（应用终止） | [查看 App Killed 日志](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-faultlog-appkilled) |
+| 混淆后堆栈不可读 | [堆栈轨迹分析](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-release-app-stack-analysis)（配合 build.md 混淆节 hstack） |
+| native 内存/线程问题 | [ASan](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-asan) / [HWASan](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-hwasan) / [TSan](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-tsan) / [UBSan](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-ubsan) |
+
+cppcrash/appfreeze 深入分析或 San 检测器接入超出本轨道脚本能力时，读上表官方页按其流程执行，**不** 自行猜测 native 栈含义。hilog 采集用法见 `test.md` 的 hilog 过滤参数表。
 
 ### 约束
 

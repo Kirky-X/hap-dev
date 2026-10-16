@@ -127,6 +127,16 @@
       "q": "用 Python 解析 .hap 安装包的 zip 目录结构",
       "expect": "no",
       "owner": "none"
+    },
+    {
+      "q": "用命令行把鸿蒙应用打包成上架的 App 包并签名发布到 AGC",
+      "expect": "trigger",
+      "note": "v0.1.8 新增 build.md（命令行构建/签名/发布）后覆盖的场景"
+    },
+    {
+      "q": "DevEco 的模拟器怎么用命令行创建和启动，Linux 服务器上能跑吗",
+      "expect": "trigger",
+      "note": "v0.1.8 新增 emulator.md（Emulator CLI，26.0.0+ 支持 Linux）后覆盖的场景"
     }
   ]
 }
